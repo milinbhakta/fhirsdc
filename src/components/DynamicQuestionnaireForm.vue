@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, reactive, watch } from 'vue'
 import fhirpath from 'fhirpath'
+import r4Model from 'fhirpath/fhir-context/r4'
 
 const props = defineProps({
   questionnaire: {
@@ -322,7 +323,7 @@ function evaluateAllValidation() {
           const result = fhirpath.evaluate(response, constraint.expression, {
             resource: response,
             questionnaire: props.questionnaire,
-          })
+          }, r4Model)
           if (result.length > 0 && result[0] === false) {
             errors.push(
               constraint.severity === 'warning'
