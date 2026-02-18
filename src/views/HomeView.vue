@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import fhirpath from 'fhirpath'
 import r4Model from 'fhirpath/fhir-context/r4'
 import DynamicQuestionnaireForm from '@/components/DynamicQuestionnaireForm.vue'
+import FhirPathEditor from '@/components/FhirPathEditor.vue'
 import JsonTooltipEditor from '@/components/JsonTooltipEditor.vue'
 import ResourceTreeNode from '@/components/ResourceTreeNode.vue'
 import { getPropertyGuide } from '@/data/fhirPropertyTooltips'
@@ -1985,11 +1986,11 @@ function buildExtractionBundle(response) {
               <div v-if="pgOutputTab === 'fhirpath'" class="pane-body" style="display: flex; flex-direction: column; padding: 0;">
                 <div style="padding: 0.75rem; border-bottom: 1px solid var(--c-border);">
                   <label style="font-size: 0.8rem; font-weight: 600; color: var(--c-text-secondary); display: block; margin-bottom: 0.35rem;">FHIRPath Expression (evaluated against generated response)</label>
-                  <textarea
+                  <FhirPathEditor
                     v-model="pgFhirPathExpr"
-                    class="editor"
-                    style="width: 100%; height: 60px; border: 1px solid var(--c-border); border-radius: 6px; padding: 0.5rem; font-family: monospace; font-size: 0.85rem; resize: vertical; outline: none;"
+                    resource-type="QuestionnaireResponse"
                     placeholder="e.g. item.where(linkId='q1').answer.valueString"
+                    @evaluate="pgRunFhirPath"
                   />
                 </div>
                 <div style="flex: 1; overflow: auto;">
@@ -2026,15 +2027,12 @@ function buildExtractionBundle(response) {
             <div style="padding: 0.75rem 0; border-bottom: 1px solid var(--c-border); margin-bottom: 0.75rem;">
               <label style="font-size: 0.75rem; font-weight: 600; color: var(--c-text-secondary); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.3rem; display: block;">FHIRPath Expression</label>
               <div style="display: flex; gap: 0.75rem; align-items: flex-start;">
-                <textarea
+                <FhirPathEditor
                   v-model="fpExpression"
-                  rows="2"
-                  spellcheck="false"
-                  style="flex: 1; font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 0.9rem; padding: 0.55rem 0.75rem; border: 2px solid var(--c-border); border-radius: 8px; background: var(--c-bg-secondary); color: var(--c-text-primary); resize: vertical; outline: none; line-height: 1.5; transition: border-color 0.15s;"
+                  :resource-type="fpSelectedResource"
                   placeholder="e.g. name.where(use='official').given"
-                  @keydown.enter.prevent="fpEvaluate"
-                  @focus="$event.target.style.borderColor = 'var(--c-accent)'"
-                  @blur="$event.target.style.borderColor = 'var(--c-border)'"
+                  style="flex: 1;"
+                  @evaluate="fpEvaluate"
                 />
                 <button class="btn btn-primary" style="padding: 0.55rem 1rem; white-space: nowrap;" @click="fpEvaluate">▶ Evaluate</button>
               </div>

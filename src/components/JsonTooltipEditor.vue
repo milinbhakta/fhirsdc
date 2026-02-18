@@ -4,7 +4,8 @@ import { EditorState } from '@codemirror/state'
 import { EditorView, hoverTooltip } from '@codemirror/view'
 import { basicSetup } from 'codemirror'
 import { json } from '@codemirror/lang-json'
-import { getPropertyTooltip } from '@/data/fhirPropertyTooltips'
+import { autocompletion } from '@codemirror/autocomplete'
+import { getPropertyTooltip, getPropertyGuide } from '@/data/fhirPropertyTooltips'
 
 const props = defineProps({
   modelValue: {
@@ -85,11 +86,42 @@ function keyAtPosition(lineText, columnIndex) {
   return null
 }
 
+function fhirJsonCompletion(context) {
+  // Only complete inside JSON key quotes: "key": ...
+  const before = context.matchBefore(/"[\w]*$/)
+  if (!before && !context.explicit) return null
+
+  const guide = getPropertyGuide(props.resourceType)
+  if (!guide || Object.keys(guide).length === 0) return null
+
+  const typed = before ? before.text.replace(/^"/,'') : ''
+  const options = Object.entries(guide)
+    .filter(([key]) => !typed || key.toLowerCase().startsWith(typed.toLowerCase()))
+    .map(([key, desc]) => ({
+      label: key,
+      type: 'property',
+      detail: desc.length > 60 ? desc.slice(0, 60) + '…' : desc,
+      boost: key.toLowerCase().startsWith(typed.toLowerCase()) ? 2 : 0,
+    }))
+
+  if (!options.length) return null
+  return {
+    from: before ? before.from + 1 : context.pos, // +1 to skip the opening quote
+    options,
+    validFor: /^[\w]*$/,
+  }
+}
+
 function editorExtensions() {
   return [
     basicSetup,
     json(),
     createTooltipExtension(),
+    autocompletion({
+      override: [fhirJsonCompletion],
+      activateOnTyping: true,
+      maxRenderedOptions: 30,
+    }),
     EditorView.lineWrapping,
     EditorView.updateListener.of((update) => {
       if (update.docChanged) {
