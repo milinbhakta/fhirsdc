@@ -138,9 +138,24 @@ export const learningModules = {
           'The SDC itemWeight extension assigns numeric weights to answer options, enabling standardized scoring (e.g., PHQ-9, GAD-7 depression/anxiety screeners). Combined with calculatedExpression, total scores are dynamically computed as the user selects answers. The ordinalValue() FHIRPath function extracts the assigned weight from a selected coding.',
       },
       {
+        title: 'Custom Validation (constraint Extension)',
+        content:
+          'SDC provides the `constraint` extension for defining custom validation rules using FHIRPath expressions. Each constraint contains:\n- **key**: A unique identifier for the constraint (e.g., "age-range").\n- **severity**: "error" (blocks submission) or "warning" (advisory).\n- **human**: The validation message shown to the user when the constraint fails.\n- **expression**: A FHIRPath expression that must evaluate to true for the item to be valid.\n\nExample: Ensure a date-of-birth is not in the future — the expression `$this.value <= today()` with human text "Date of birth cannot be in the future."\n\nConstraints are evaluated by the form filler after each user input change. If the expression returns false, the human message is displayed as an error or warning next to the item.',
+      },
+      {
+        title: 'Cross-Item Validation (targetConstraint)',
+        content:
+          'While the `constraint` extension validates a single item, `targetConstraint` validates relationships **between** items. It is placed on a group or the Questionnaire root and can reference multiple items in its FHIRPath expression.\n\nExample: "Diastolic BP must be less than Systolic BP" — expressed as:\n`%resource.item.where(linkId=\'diastolic\').answer.valueInteger < %resource.item.where(linkId=\'systolic\').answer.valueInteger`\n\nTargetConstraint also supports key, severity, human, and expression fields. Use it for business rules that span multiple fields.',
+      },
+      {
+        title: 'Validation Message Best Practices',
+        content:
+          '- Write clear, actionable `human` messages: "Enter a value between 30 and 250" rather than "Invalid value".\n- Use `severity: error` for hard stops (data integrity) and `severity: warning` for soft guidance.\n- Guard FHIRPath expressions with `exists()` to avoid false errors on empty fields.\n- Combine `constraint` with `required`, `maxLength`, `minValue/maxValue`, and `regex` for layered validation.\n- Test constraints against edge cases: empty input, boundary values, and type mismatches.',
+      },
+      {
         title: 'Advanced Behavior Extensions',
         content:
-          '- **entryMode**: Controls how items are presented (sequential, prior-edit, random).\n- **usageMode**: Whether the item applies during data capture, display, or both.\n- **signatureRequired**: Requires digital signature on submission.\n- **targetConstraint** (extension): Complex multi-item validation rules.\n- **constraint** (extension): Item-level validation expressed in FHIRPath.\n- **openLabel**: Label for the "other" option in open-choice items.',
+          '- **entryMode**: Controls how items are presented (sequential, prior-edit, random).\n- **usageMode**: Whether the item applies during data capture, display, or both.\n- **signatureRequired**: Requires digital signature on submission.\n- **openLabel**: Label for the "other" option in open-choice items.',
       },
     ],
   },

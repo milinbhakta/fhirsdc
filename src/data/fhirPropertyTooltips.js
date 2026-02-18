@@ -70,6 +70,11 @@ const QUESTIONNAIRE_TOOLTIPS = {
   shortText: 'SDC extension: Abbreviated label for compact screen display.',
   collapsible: 'SDC extension: Makes a group collapsible (default-open or default-closed).',
   ordinalValue: 'Extension: Assigns a numeric weight/score to an answer option for scoring.',
+  constraint: 'SDC extension: Item-level custom validation using a FHIRPath expression. Contains key, severity (error|warning), human (message), and expression.',
+  targetConstraint: 'SDC extension: Cross-item validation rule on a group, validating relationships between multiple items.',
+  key: 'Unique identifier for a constraint within a questionnaire.',
+  severity: 'Constraint severity: "error" blocks submission; "warning" is advisory only.',
+  human: 'Human-readable validation message displayed when a constraint fails.',
 }
 
 const QUESTIONNAIRE_RESPONSE_TOOLTIPS = {

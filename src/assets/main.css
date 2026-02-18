@@ -310,3 +310,136 @@ body {
   --color-background: #fff;
   --color-background-mute: var(--c-bg-app);
 }
+
+/* REFERENCE GRID */
+.reference-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 1rem;
+}
+
+.reference-grid.compact {
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+}
+
+.reference-card {
+  background: var(--c-bg-pane);
+  border: 1px solid var(--c-border);
+  border-radius: 8px;
+  padding: 1rem;
+  transition: box-shadow 0.15s, border-color 0.15s;
+}
+
+.reference-card:hover {
+  border-color: var(--c-border-hover);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+
+.reference-card h5 {
+  margin: 0 0 0.35rem 0;
+  font-size: 0.9rem;
+  color: var(--c-text-primary);
+}
+
+/* EXAMPLE GRID */
+.example-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 1rem;
+}
+
+/* ERROR TEXT */
+.error-text {
+  color: var(--c-danger);
+  padding: 1rem;
+  font-size: 0.9rem;
+}
+
+/* TREE */
+.tree-shell {
+  padding: 0.5rem;
+}
+
+.tree-shell ul {
+  list-style: none;
+  padding-left: 0;
+  margin: 0;
+}
+
+/* STEPS */
+.steps {
+  padding-left: 1.2rem;
+}
+
+/* BTN ROW */
+.btn-row {
+  display: flex;
+  align-items: center;
+}
+
+/* TAB BUTTON */
+.tab-btn {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* PLAYGROUND */
+.playground-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.playground-shell .split-pane {
+  gap: 1rem;
+}
+
+.playground-shell .pane {
+  border: 1px solid var(--c-border);
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.playground-shell .pane-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0.75rem;
+  background: var(--c-bg-secondary);
+  border-bottom: 1px solid var(--c-border);
+  font-size: 0.85rem;
+  font-weight: 600;
+  min-height: 36px;
+}
+
+.playground-shell .pane-body {
+  flex: 1;
+  overflow: auto;
+}
+
+.btn-sm {
+  padding: 0.3rem 0.75rem;
+  font-size: 0.78rem;
+  border-radius: 4px;
+  border: 1px solid var(--c-border);
+  background: var(--c-bg-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+  color: var(--c-text-secondary);
+}
+
+.btn-sm:hover {
+  background: var(--c-accent);
+  color: #fff;
+  border-color: var(--c-accent);
+}
+
+.btn-sm.btn-primary {
+  background: var(--c-accent);
+  color: #fff;
+  border-color: var(--c-accent);
+}

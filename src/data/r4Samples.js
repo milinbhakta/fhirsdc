@@ -1103,6 +1103,134 @@ export const behaviorExamples = [
 }`,
   },
   {
+    title: 'Custom Validation (constraint) with Error Message',
+    description: 'Use the constraint extension to define a FHIRPath rule and a human-readable error message.',
+    snippet: `{
+  "linkId": "dob",
+  "text": "Date of Birth",
+  "type": "date",
+  "required": true,
+  "extension": [{
+    "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-constraint",
+    "extension": [
+      { "url": "key", "valueId": "dob-not-future" },
+      { "url": "severity", "valueCode": "error" },
+      { "url": "human", "valueString": "Date of birth cannot be in the future." },
+      {
+        "url": "expression",
+        "valueString": "$this.value <= today()"
+      }
+    ]
+  }]
+}`,
+  },
+  {
+    title: 'Custom Validation with Warning Severity',
+    description: 'A soft validation that warns the user but does not block form submission.',
+    snippet: `{
+  "linkId": "weight",
+  "text": "Body weight (kg)",
+  "type": "decimal",
+  "extension": [{
+    "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-constraint",
+    "extension": [
+      { "url": "key", "valueId": "weight-range-warn" },
+      { "url": "severity", "valueCode": "warning" },
+      {
+        "url": "human",
+        "valueString": "Weight seems unusual. Please verify: expected 2-300 kg."
+      },
+      {
+        "url": "expression",
+        "valueString": "$this.value >= 2 and $this.value <= 300"
+      }
+    ]
+  }]
+}`,
+  },
+  {
+    title: 'Cross-Item Validation (targetConstraint)',
+    description: 'Validate a relationship between two items — diastolic BP must be less than systolic.',
+    snippet: `{
+  "linkId": "bp-group",
+  "text": "Blood Pressure",
+  "type": "group",
+  "extension": [{
+    "url": "http://hl7.org/fhir/StructureDefinition/targetConstraint",
+    "extension": [
+      { "url": "key", "valueId": "bp-diastolic-lt-systolic" },
+      { "url": "severity", "valueCode": "error" },
+      {
+        "url": "human",
+        "valueString": "Diastolic pressure must be less than systolic pressure."
+      },
+      {
+        "url": "expression",
+        "valueString": "%resource.item.where(linkId='diastolic').answer.valueInteger < %resource.item.where(linkId='systolic').answer.valueInteger"
+      }
+    ]
+  }],
+  "item": [
+    { "linkId": "systolic", "text": "Systolic (mmHg)", "type": "integer" },
+    { "linkId": "diastolic", "text": "Diastolic (mmHg)", "type": "integer" }
+  ]
+}`,
+  },
+  {
+    title: 'Multiple Constraints on One Item',
+    description: 'Stack multiple constraint extensions for layered validation with different messages.',
+    snippet: `{
+  "linkId": "email",
+  "text": "Email address",
+  "type": "string",
+  "maxLength": 254,
+  "extension": [
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-constraint",
+      "extension": [
+        { "url": "key", "valueId": "email-format" },
+        { "url": "severity", "valueCode": "error" },
+        { "url": "human", "valueString": "Please enter a valid email address (e.g., user@example.com)." },
+        { "url": "expression", "valueString": "$this.value.matches('^[^@\\\\s]+@[^@\\\\s]+\\\\.[^@\\\\s]+$')" }
+      ]
+    },
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-constraint",
+      "extension": [
+        { "url": "key", "valueId": "email-org-domain" },
+        { "url": "severity", "valueCode": "warning" },
+        { "url": "human", "valueString": "Consider using your organization email (@hospital.org)." },
+        { "url": "expression", "valueString": "$this.value.endsWith('@hospital.org')" }
+      ]
+    }
+  ]
+}`,
+  },
+  {
+    title: 'Constraint Guarding Empty Fields',
+    description: 'Use exists() to avoid false errors when the field is optional and empty.',
+    snippet: `{
+  "linkId": "age",
+  "text": "Patient age",
+  "type": "integer",
+  "extension": [{
+    "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-constraint",
+    "extension": [
+      { "url": "key", "valueId": "age-valid-range" },
+      { "url": "severity", "valueCode": "error" },
+      {
+        "url": "human",
+        "valueString": "Age must be between 0 and 150."
+      },
+      {
+        "url": "expression",
+        "valueString": "$this.value.empty() or ($this.value >= 0 and $this.value <= 150)"
+      }
+    ]
+  }]
+}`,
+  },
+  {
     title: 'answerValueSet Reference',
     description: 'Use a ValueSet for answer options instead of inline answerOption.',
     snippet: `{

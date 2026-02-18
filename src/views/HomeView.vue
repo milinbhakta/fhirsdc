@@ -89,6 +89,12 @@ const tabs = [
     icon: '🔧'
   },
   {
+    id: 'playground',
+    label: 'Playground',
+    goal: 'Experiment freely.',
+    icon: '🧪'
+  },
+  {
     id: 'quiz',
     label: 'Quiz',
     goal: 'Test your knowledge.',
@@ -118,6 +124,244 @@ const selectedFhirPathResource = ref('QuestionnaireResponse')
 const fhirPathExpression = ref("item.where(linkId='pain').answer.valueCoding.display")
 const fhirPathResult = ref('')
 const fhirPathError = ref('')
+
+// ── Playground State ──
+const playgroundTemplates = [
+  {
+    id: 'blank',
+    label: 'Blank Questionnaire',
+    json: {
+      resourceType: 'Questionnaire',
+      id: 'my-form',
+      url: 'http://example.org/fhir/Questionnaire/my-form',
+      status: 'draft',
+      title: 'My Custom Form',
+      item: [
+        { linkId: 'q1', text: 'Your first question', type: 'string' },
+      ],
+    },
+  },
+  {
+    id: 'enablewhen',
+    label: 'EnableWhen Demo',
+    json: {
+      resourceType: 'Questionnaire',
+      id: 'enablewhen-demo',
+      status: 'active',
+      title: 'EnableWhen Playground',
+      item: [
+        {
+          linkId: 'has-allergy',
+          text: 'Do you have any allergies?',
+          type: 'boolean',
+        },
+        {
+          linkId: 'allergy-detail',
+          text: 'Describe your allergies',
+          type: 'text',
+          enableWhen: [{ question: 'has-allergy', operator: '=', answerBoolean: true }],
+        },
+        {
+          linkId: 'severity',
+          text: 'Severity',
+          type: 'choice',
+          enableWhen: [{ question: 'has-allergy', operator: '=', answerBoolean: true }],
+          answerOption: [
+            { valueCoding: { code: 'mild', display: 'Mild' } },
+            { valueCoding: { code: 'moderate', display: 'Moderate' } },
+            { valueCoding: { code: 'severe', display: 'Severe' } },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    id: 'calculated',
+    label: 'Calculated Expression',
+    json: {
+      resourceType: 'Questionnaire',
+      id: 'calc-demo',
+      status: 'active',
+      title: 'BMI Calculator',
+      item: [
+        { linkId: 'height', text: 'Height (cm)', type: 'integer', required: true },
+        { linkId: 'weight', text: 'Weight (kg)', type: 'integer', required: true },
+        {
+          linkId: 'bmi',
+          text: 'BMI (auto-calculated)',
+          type: 'decimal',
+          readOnly: true,
+          extension: [
+            {
+              url: 'http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-calculatedExpression',
+              valueExpression: {
+                language: 'text/fhirpath',
+                expression:
+                  "let h := item.where(linkId='height').answer.valueInteger.first(); let w := item.where(linkId='weight').answer.valueInteger.first(); iif(h.exists() and w.exists() and h > 0, (w / ((h/100) * (h/100))).round(1), {})",
+              },
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    id: 'scoring',
+    label: 'PHQ-2 Scoring',
+    json: {
+      resourceType: 'Questionnaire',
+      id: 'phq2-demo',
+      status: 'active',
+      title: 'PHQ-2 Depression Screen',
+      item: [
+        {
+          linkId: 'phq1',
+          text: 'Little interest or pleasure in doing things?',
+          type: 'choice',
+          answerOption: [
+            { valueCoding: { code: '0', display: 'Not at all' } },
+            { valueCoding: { code: '1', display: 'Several days' } },
+            { valueCoding: { code: '2', display: 'More than half the days' } },
+            { valueCoding: { code: '3', display: 'Nearly every day' } },
+          ],
+        },
+        {
+          linkId: 'phq2',
+          text: 'Feeling down, depressed, or hopeless?',
+          type: 'choice',
+          answerOption: [
+            { valueCoding: { code: '0', display: 'Not at all' } },
+            { valueCoding: { code: '1', display: 'Several days' } },
+            { valueCoding: { code: '2', display: 'More than half the days' } },
+            { valueCoding: { code: '3', display: 'Nearly every day' } },
+          ],
+        },
+        {
+          linkId: 'total',
+          text: 'Total Score',
+          type: 'integer',
+          readOnly: true,
+          extension: [
+            {
+              url: 'http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-calculatedExpression',
+              valueExpression: {
+                language: 'text/fhirpath',
+                expression:
+                  "let a := item.where(linkId='phq1').answer.valueCoding.code.first().toInteger(); let b := item.where(linkId='phq2').answer.valueCoding.code.first().toInteger(); iif(a.exists() and b.exists(), a + b, {})",
+              },
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    id: 'validation',
+    label: 'Custom Validation',
+    json: {
+      resourceType: 'Questionnaire',
+      id: 'validation-demo',
+      status: 'active',
+      title: 'Validation Demo',
+      item: [
+        {
+          linkId: 'dob',
+          text: 'Date of Birth',
+          type: 'date',
+          required: true,
+        },
+        {
+          linkId: 'systolic',
+          text: 'Systolic BP (mmHg)',
+          type: 'integer',
+          required: true,
+        },
+        {
+          linkId: 'diastolic',
+          text: 'Diastolic BP (mmHg)',
+          type: 'integer',
+          required: true,
+        },
+        {
+          linkId: 'email',
+          text: 'Contact email',
+          type: 'string',
+          maxLength: 254,
+        },
+      ],
+    },
+  },
+  {
+    id: 'mixed',
+    label: 'All Item Types',
+    json: {
+      resourceType: 'Questionnaire',
+      id: 'all-types',
+      status: 'active',
+      title: 'All Item Types Demo',
+      item: [
+        { linkId: 'grp', text: 'Patient Info', type: 'group', item: [
+          { linkId: 'name', text: 'Full name', type: 'string', required: true },
+          { linkId: 'notes', text: 'Additional notes', type: 'text' },
+          { linkId: 'age', text: 'Age', type: 'integer' },
+          { linkId: 'temp', text: 'Temperature (°C)', type: 'decimal' },
+          { linkId: 'visit-date', text: 'Visit date', type: 'date' },
+          { linkId: 'consent', text: 'I consent to data collection', type: 'boolean' },
+        ]},
+        { linkId: 'priority', text: 'Priority', type: 'choice', answerOption: [
+          { valueCoding: { code: 'low', display: 'Low' } },
+          { valueCoding: { code: 'medium', display: 'Medium' } },
+          { valueCoding: { code: 'high', display: 'High' } },
+        ]},
+      ],
+    },
+  },
+]
+
+const pgSelectedTemplate = ref('blank')
+const pgJson = ref(JSON.stringify(playgroundTemplates[0].json, null, 2))
+const pgFhirPathExpr = ref('')
+const pgFhirPathResult = ref('')
+const pgFhirPathError = ref('')
+const pgGeneratedResponse = ref(null)
+const pgOutputTab = ref('form')
+
+const pgParsed = computed(() => safeParse(pgJson.value))
+
+const pgValidationIssues = computed(() => {
+  if (pgParsed.value.error) return ['JSON is not valid: ' + pgParsed.value.error]
+  return validateQuestionnaire(pgParsed.value.value)
+})
+
+function pgLoadTemplate(templateId) {
+  const tpl = playgroundTemplates.find((t) => t.id === templateId)
+  if (!tpl) return
+  pgSelectedTemplate.value = templateId
+  pgJson.value = JSON.stringify(tpl.json, null, 2)
+  pgGeneratedResponse.value = null
+  pgFhirPathExpr.value = ''
+  pgFhirPathResult.value = ''
+  pgFhirPathError.value = ''
+}
+
+function pgUpdateResponse(resp) {
+  pgGeneratedResponse.value = resp
+}
+
+function pgRunFhirPath() {
+  pgFhirPathError.value = ''
+  pgFhirPathResult.value = ''
+  if (!pgGeneratedResponse.value || !pgFhirPathExpr.value.trim()) return
+  try {
+    const result = evaluateWithLetSupport(pgGeneratedResponse.value, pgFhirPathExpr.value)
+    pgFhirPathResult.value = JSON.stringify(result, null, 2)
+  } catch (err) {
+    pgFhirPathError.value = err instanceof Error ? err.message : 'FHIRPath evaluation failed.'
+  }
+}
+
+watch(pgFhirPathExpr, () => { pgRunFhirPath() })
+watch(pgGeneratedResponse, () => { pgRunFhirPath() })
 
 const generatedResponse = ref(sampleQuestionnaireResponse)
 
@@ -1352,6 +1596,117 @@ function buildExtractionBundle(response) {
                 </tr>
               </tbody>
             </table>
+          </div>
+        </div>
+
+        <!-- PLAYGROUND -->
+        <div v-if="activeTab === 'playground'" class="playground-shell">
+          <!-- Top toolbar -->
+          <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap;">
+            <label style="font-weight: 600; font-size: 0.85rem; color: var(--c-text-secondary);">Starter Template:</label>
+            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+              <button
+                v-for="tpl in playgroundTemplates"
+                :key="tpl.id"
+                class="btn btn-sm"
+                :class="{ 'btn-primary': pgSelectedTemplate === tpl.id }"
+                @click="pgLoadTemplate(tpl.id)"
+              >
+                {{ tpl.label }}
+              </button>
+            </div>
+          </div>
+
+          <div class="split-pane" style="height: calc(100vh - var(--header-height) - 7rem);">
+            <!-- Left: JSON Editor -->
+            <div class="pane">
+              <div class="pane-header">
+                <span>Questionnaire JSON</span>
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                  <span v-if="pgParsed.error" style="color: var(--c-danger); font-size: 0.75rem;">Invalid JSON</span>
+                  <span v-else style="color: var(--c-success); font-size: 0.75rem;">Valid</span>
+                </div>
+              </div>
+              <div class="pane-body">
+                <JsonTooltipEditor
+                  v-model="pgJson"
+                  resource-type="Questionnaire"
+                  style="height: 100%; border: none;"
+                />
+              </div>
+            </div>
+
+            <!-- Right: Output panels -->
+            <div class="pane" style="display: flex; flex-direction: column;">
+              <div class="pane-header" style="gap: 0;">
+                <div style="display: flex; gap: 0;">
+                  <button
+                    v-for="ot in [
+                      { id: 'form', label: 'Live Form' },
+                      { id: 'response', label: 'Response JSON' },
+                      { id: 'fhirpath', label: 'FHIRPath' },
+                      { id: 'validate', label: 'Validation' },
+                    ]"
+                    :key="ot.id"
+                    style="border: none; background: none; font-weight: 600; cursor: pointer; padding: 0 0.75rem; font-size: 0.8rem; height: 100%;"
+                    :style="{ color: pgOutputTab === ot.id ? 'var(--c-accent)' : 'var(--c-text-secondary)', borderBottom: pgOutputTab === ot.id ? '2px solid var(--c-accent)' : '2px solid transparent' }"
+                    @click="pgOutputTab = ot.id"
+                  >{{ ot.label }}</button>
+                </div>
+              </div>
+
+              <!-- Live Form -->
+              <div v-if="pgOutputTab === 'form'" class="pane-body" style="padding: 1.5rem; overflow: auto;">
+                <DynamicQuestionnaireForm
+                  v-if="pgParsed.value"
+                  :questionnaire="pgParsed.value"
+                  @response-updated="pgUpdateResponse"
+                />
+                <p v-else class="hint-text" style="font-style: italic;">Fix JSON errors to see the live form.</p>
+              </div>
+
+              <!-- Response JSON -->
+              <div v-if="pgOutputTab === 'response'" class="pane-body" style="padding: 0;">
+                <pre class="code-output" style="height: 100%; margin: 0; border-radius: 0;">{{ pgGeneratedResponse ? JSON.stringify(pgGeneratedResponse, null, 2) : '// Fill the form to see the response' }}</pre>
+              </div>
+
+              <!-- FHIRPath Tester -->
+              <div v-if="pgOutputTab === 'fhirpath'" class="pane-body" style="display: flex; flex-direction: column; padding: 0;">
+                <div style="padding: 0.75rem; border-bottom: 1px solid var(--c-border);">
+                  <label style="font-size: 0.8rem; font-weight: 600; color: var(--c-text-secondary); display: block; margin-bottom: 0.35rem;">FHIRPath Expression (evaluated against generated response)</label>
+                  <textarea
+                    v-model="pgFhirPathExpr"
+                    class="editor"
+                    style="width: 100%; height: 60px; border: 1px solid var(--c-border); border-radius: 6px; padding: 0.5rem; font-family: monospace; font-size: 0.85rem; resize: vertical; outline: none;"
+                    placeholder="e.g. item.where(linkId='q1').answer.valueString"
+                  />
+                </div>
+                <div style="flex: 1; overflow: auto;">
+                  <div v-if="pgFhirPathError" class="error-text">{{ pgFhirPathError }}</div>
+                  <pre v-else class="code-output" style="height: 100%; margin: 0; border-radius: 0;">{{ pgFhirPathResult || '// Result will appear here' }}</pre>
+                </div>
+              </div>
+
+              <!-- Validation -->
+              <div v-if="pgOutputTab === 'validate'" class="pane-body" style="padding: 1.5rem; overflow: auto;">
+                <h4 style="margin: 0 0 1rem 0;">Structural Validation</h4>
+                <div v-for="(issue, idx) in pgValidationIssues" :key="idx" style="display: flex; align-items: flex-start; gap: 0.5rem; margin-bottom: 0.5rem; padding: 0.5rem 0.75rem; border-radius: 6px;"
+                     :style="{ background: issue.startsWith('No structural') ? '#f0fdf4' : '#fef2f2', color: issue.startsWith('No structural') ? '#166534' : '#991b1b' }">
+                  <span style="font-size: 1rem;">{{ issue.startsWith('No structural') ? '✓' : '✗' }}</span>
+                  <span style="font-size: 0.85rem;">{{ issue }}</span>
+                </div>
+
+                <h4 style="margin: 2rem 0 0.75rem 0;">Quick Tips</h4>
+                <ul style="color: var(--c-text-secondary); font-size: 0.85rem; line-height: 1.8; padding-left: 1.2rem;">
+                  <li>Every item needs a unique <strong>linkId</strong> and a <strong>type</strong>.</li>
+                  <li>The Questionnaire must have <strong>status</strong> (draft, active, retired).</li>
+                  <li>Use <strong>required: true</strong> on mandatory items.</li>
+                  <li>Add <strong>enableWhen</strong> for conditional visibility.</li>
+                  <li>Use <strong>readOnly: true</strong> on calculated items.</li>
+                  <li>Add the <strong>constraint</strong> extension for custom validation with a <strong>human</strong> error message.</li>
+                </ul>
+              </div>
+            </div>
           </div>
         </div>
 
