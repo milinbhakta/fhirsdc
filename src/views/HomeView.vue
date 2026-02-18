@@ -184,6 +184,22 @@ const authoringSections = [
   { id: 'sdc-context', label: 'SDC Expression Context' },
 ]
 
+function debounce(fn, delay) {
+  let timeout
+  return (...args) => {
+    clearTimeout(timeout)
+    timeout = setTimeout(() => fn(...args), delay)
+  }
+}
+
+const runFhirPathDebounced = debounce(() => {
+  runFhirPath()
+}, 500)
+
+watch(fhirPathExpression, () => {
+  runFhirPathDebounced()
+})
+
 watch(
   [selectedFhirPathResource, questionnaireJson, responseJson, generatedResponse],
   () => {
@@ -299,6 +315,30 @@ function collapseAllTreeNodes() {
 
 function onTreeNodeSelected(payload) {
   selectedTreeNode.value = payload
+}
+
+function useNodePathAsExpression() {
+  if (!selectedTreeNode.value?.path) return
+  
+  let expr = selectedTreeNode.value.path
+  
+  // "root" is just the placeholder for the top-level object
+  if (expr === 'root') {
+    expr = '' 
+  }
+
+  // If we ever have "root.something", strip "root."
+  if (expr.startsWith('root.')) {
+     expr = expr.substring(5)
+  }
+
+  // Switch tab
+  activeTab.value = 'fhirpath'
+  fhirPathExpression.value = expr
+  selectedFhirPathResource.value = selectedResourceType.value
+  
+  // Force immediate run (bypass debounce)
+  runFhirPath()
 }
 
 function validateQuestionnaire(resource) {
@@ -620,6 +660,11 @@ function buildExtractionBundle(response) {
         <p><strong>Path:</strong> {{ selectedTreeNode.path }}</p>
         <p><strong>Kind:</strong> {{ selectedTreeNode.kind }}</p>
         <p><strong>Description:</strong> {{ selectedTreeNode.tooltip || 'No tooltip for this key.' }}</p>
+        <div class="btn-row">
+            <button class="primary-btn" @click="useNodePathAsExpression">
+                Query this path →
+            </button>
+        </div>
         <pre class="output">{{ JSON.stringify(selectedTreeNode.value, null, 2) }}</pre>
       </div>
 
