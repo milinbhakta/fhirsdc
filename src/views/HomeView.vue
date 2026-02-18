@@ -1205,6 +1205,10 @@ function buildExtractionBundle(response) {
       </nav>
 
       <div class="sidebar-footer">
+        <router-link to="/fhirpath-lab" class="fplab-sidebar-link">
+          🧪 FHIRPath Lab
+          <span style="font-size: 0.65rem; background: rgba(99,102,241,0.2); padding: 0.1rem 0.4rem; border-radius: 4px;">NEW</span>
+        </router-link>
         <div class="flex-col gap-2">
             <div style="display:flex; justify-content:space-between;">
                 <span style="font-size:0.8rem">Progress</span>
