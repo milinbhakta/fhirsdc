@@ -87,6 +87,31 @@ function buildResponseItems(itemList = [], respectEnableWhen = true) {
     .filter(Boolean)
 }
 
+/**
+ * Extract the value string from an answerOption for use in <option :value>.
+ * Supports valueCoding, valueString, valueInteger, valueDate, valueReference.
+ */
+function getOptionValue(option) {
+  if (option.valueCoding) return option.valueCoding.code || ''
+  if (Object.hasOwn(option, 'valueString')) return option.valueString
+  if (Object.hasOwn(option, 'valueInteger')) return String(option.valueInteger)
+  if (option.valueDate) return option.valueDate
+  if (option.valueReference) return option.valueReference.reference || ''
+  return ''
+}
+
+/**
+ * Extract the display label from an answerOption for use in <option> text.
+ */
+function getOptionLabel(option) {
+  if (option.valueCoding) return option.valueCoding.display || option.valueCoding.code || 'Option'
+  if (Object.hasOwn(option, 'valueString')) return option.valueString
+  if (Object.hasOwn(option, 'valueInteger')) return String(option.valueInteger)
+  if (option.valueDate) return option.valueDate
+  if (option.valueReference) return option.valueReference.display || option.valueReference.reference || 'Reference'
+  return 'Option'
+}
+
 function buildAnswer(item) {
   const value = answers[item.linkId]
   if (value === '' || value === undefined || value === null) {
@@ -105,15 +130,17 @@ function buildAnswer(item) {
       return { valueBoolean: Boolean(value) }
     case 'date':
       return { valueDate: String(value) }
-    case 'choice':
-      return {
-        valueCoding: {
-          code: String(value),
-          display:
-            item.answerOption?.find((opt) => opt.valueCoding?.code === value)?.valueCoding?.display ||
-            String(value),
-        },
+    case 'choice': {
+      const matchedOpt = item.answerOption?.find((opt) => getOptionValue(opt) === value)
+      if (matchedOpt) {
+        if (matchedOpt.valueCoding) return { valueCoding: matchedOpt.valueCoding }
+        if (Object.hasOwn(matchedOpt, 'valueInteger')) return { valueCoding: { code: String(matchedOpt.valueInteger), display: String(matchedOpt.valueInteger) } }
+        if (matchedOpt.valueDate) return { valueCoding: { code: matchedOpt.valueDate, display: matchedOpt.valueDate } }
+        if (matchedOpt.valueReference) return { valueReference: matchedOpt.valueReference }
+        return { valueString: matchedOpt.valueString ?? String(value) }
       }
+      return { valueString: String(value) }
+    }
     default:
       return { valueString: String(value) }
   }
@@ -442,9 +469,9 @@ onMounted(() => {
         <option
           v-for="(option, index) in item.answerOption || []"
           :key="`${item.linkId}-opt-${index}`"
-          :value="option.valueCoding?.code || ''"
+          :value="getOptionValue(option)"
         >
-          {{ option.valueCoding?.display || option.valueCoding?.code || 'Option' }}
+          {{ getOptionLabel(option) }}
         </option>
       </select>
 

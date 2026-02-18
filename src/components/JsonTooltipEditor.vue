@@ -162,6 +162,114 @@ function getSchemaAtPath(resourceType, path) {
   return schema
 }
 
+// Properties only valid for specific item types — hide for other types
+const typeRestrictedProps = {
+  answerOption: new Set(['choice', 'open-choice']),
+  answerValueSet: new Set(['choice', 'open-choice']),
+  maxLength: new Set(['string', 'text', 'url']),
+}
+
+/**
+ * Detect the "type" value of the current item by scanning the enclosing object.
+ * Only reads at depth 1 (direct children of the enclosing {}).
+ */
+function getCurrentItemType(doc, pos) {
+  const text = doc.sliceString(0, pos)
+  let depth = 0
+  let objStart = -1
+  for (let i = text.length - 1; i >= 0; i--) {
+    const ch = text[i]
+    if (ch === '}' || ch === ']') depth++
+    else if (ch === '{' || ch === '[') {
+      if (depth === 0 && ch === '{') { objStart = i; break }
+      depth--
+    }
+  }
+  if (objStart === -1) return null
+
+  const maxScan = Math.min(doc.length, objStart + 3000)
+  const objText = doc.sliceString(objStart, maxScan)
+  let d = 0
+  let j = 0
+  while (j < objText.length) {
+    const ch = objText[j]
+    if (ch === '"') {
+      j++
+      const start = j
+      while (j < objText.length) {
+        if (objText[j] === '\\') { j += 2; continue }
+        if (objText[j] === '"') break
+        j++
+      }
+      const str = objText.substring(start, j)
+      j++
+      if (d === 1 && str === 'type') {
+        while (j < objText.length && ' \t\n\r'.includes(objText[j])) j++
+        if (j < objText.length && objText[j] === ':') {
+          j++
+          while (j < objText.length && ' \t\n\r'.includes(objText[j])) j++
+          if (j < objText.length && objText[j] === '"') {
+            j++
+            const valStart = j
+            while (j < objText.length && objText[j] !== '"') j++
+            return objText.substring(valStart, j)
+          }
+        }
+      }
+    } else if (ch === '{' || ch === '[') { d++; j++ }
+    else if (ch === '}' || ch === ']') { d--; j++; if (d <= 0) break }
+    else j++
+  }
+  return null
+}
+
+/**
+ * Get set of keys already present in the current object.
+ * Prevents suggesting duplicates.
+ */
+function getExistingKeys(doc, pos) {
+  const text = doc.sliceString(0, pos)
+  let depth = 0
+  let objStart = -1
+  for (let i = text.length - 1; i >= 0; i--) {
+    const ch = text[i]
+    if (ch === '}' || ch === ']') depth++
+    else if (ch === '{' || ch === '[') {
+      if (depth === 0 && ch === '{') { objStart = i; break }
+      depth--
+    }
+  }
+  if (objStart === -1) return new Set()
+
+  const keys = new Set()
+  const maxScan = Math.min(doc.length, objStart + 5000)
+  const objText = doc.sliceString(objStart, maxScan)
+  let d = 0
+  let j = 0
+  while (j < objText.length) {
+    const ch = objText[j]
+    if (ch === '"') {
+      j++
+      const start = j
+      while (j < objText.length) {
+        if (objText[j] === '\\') { j += 2; continue }
+        if (objText[j] === '"') break
+        j++
+      }
+      const str = objText.substring(start, j)
+      j++
+      if (d === 1) {
+        let k = j
+        while (k < objText.length && ' \t\n\r'.includes(objText[k])) k++
+        if (k < objText.length && objText[k] === ':') keys.add(str)
+      }
+    } else if (ch === '{' || ch === '[') { d++; j++ }
+    else if (ch === '}' || ch === ']') { d--; j++; if (d <= 0) break }
+    else j++
+  }
+  return keys
+}
+
 /**
  * Main completion source. Determines position (key vs value) using the text
  * immediately before the matched token, then delegates to key or value completions.
@@ -216,10 +324,7 @@ function fhirJsonCompletion(context) {
 
 /**
  * Provide key completions at the current schema path.
- * @param {object} context - CodeMirror completion context
- * @param {string[]} path - Current nesting path
- * @param {object|null} quotedMatch - Match from /"[\w]*$/ (cursor inside quotes)
- * @param {object|null} wordMatch - Match from /[a-zA-Z]\w*$/ (cursor typing bare word)
+ * Includes: duplicate filtering, type-aware filtering & boosting, smart scaffolding.
  */
 function getKeyCompletions(context, path, quotedMatch, wordMatch) {
   const schema = getSchemaAtPath(props.resourceType, path)
@@ -229,34 +334,99 @@ function getKeyCompletions(context, path, quotedMatch, wordMatch) {
     ? quotedMatch.text.replace(/^"/, '')
     : (wordMatch ? wordMatch.text : '')
 
+  // Smart context detection
+  const existingKeys = getExistingKeys(context.state.doc, context.pos)
+  const isDirectItemLevel = path.length > 0 && path[path.length - 1] === 'item'
+  const currentType = isDirectItemLevel
+    ? getCurrentItemType(context.state.doc, context.pos)
+    : null
+
   const options = Object.entries(schema)
+    .filter(([key]) => !existingKeys.has(key))
+    .filter(([key]) => {
+      // Type-aware filtering: hide properties that don't apply to this item type
+      if (!currentType || !typeRestrictedProps[key]) return true
+      return typeRestrictedProps[key].has(currentType)
+    })
     .filter(([key]) => !typed || key.toLowerCase().startsWith(typed.toLowerCase()))
-    .map(([key, prop]) => ({
-      label: key,
-      type: 'property',
-      detail: prop.description
-        ? (prop.description.length > 55 ? prop.description.slice(0, 55) + '…' : prop.description)
-        : '',
-      boost: typed && key.toLowerCase().startsWith(typed.toLowerCase()) ? 2 : 0,
-      apply: createKeyApply(key, prop),
-    }))
+    .map(([key, prop]) => {
+      let boost = 0
+      if (typed && key.toLowerCase().startsWith(typed.toLowerCase())) boost = 2
+
+      // Boost essential item properties so they appear first
+      if (isDirectItemLevel) {
+        if (key === 'linkId' || key === 'text' || key === 'type') boost += 3
+        if (key === 'required') boost += 1
+      }
+
+      // Type-aware boosting: surface the most useful properties for each type
+      if (currentType === 'choice' || currentType === 'open-choice') {
+        if (key === 'answerOption' || key === 'answerValueSet') boost += 5
+        if (key === 'repeats') boost += 2
+      } else if (currentType === 'group') {
+        if (key === 'item') boost += 5
+      } else if (currentType === 'string' || currentType === 'text' || currentType === 'url') {
+        if (key === 'maxLength') boost += 3
+      }
+
+      let detail = prop.description || ''
+      if (detail.length > 55) detail = detail.slice(0, 55) + '…'
+
+      // Add type hint for restricted properties
+      if (currentType && typeRestrictedProps[key]) {
+        const types = [...typeRestrictedProps[key]].join('/')
+        detail = `[${types}] ${detail}`
+      }
+
+      return {
+        label: key,
+        type: 'property',
+        detail,
+        boost,
+        apply: createKeyApply(key, prop),
+      }
+    })
 
   if (!options.length) return null
 
   let from
-  if (quotedMatch) {
-    from = quotedMatch.from + 1 // after the opening quote
-  } else if (wordMatch) {
-    from = wordMatch.from
-  } else {
-    from = context.pos
-  }
+  if (quotedMatch) from = quotedMatch.from + 1
+  else if (wordMatch) from = wordMatch.from
+  else from = context.pos
 
   return { from, options, validFor: /^[\w]*$/ }
 }
 
+/**
+ * Generate the text to insert when a key completion is accepted.
+ * For array-of-object types, scaffolds an opening { to keep the user in flow.
+ */
 function createKeyApply(key, prop) {
+  if (prop.type === 'array' && prop.children && Object.keys(prop.children).length > 0) {
+    // Array of objects — scaffold with [{ to get user started
+    return (view, completion, from, to) => {
+      const line = view.state.doc.lineAt(from)
+      const baseIndent = line.text.match(/^\s*/)[0]
+      const insert = `${key}": [\n${baseIndent}  {\n${baseIndent}    "`
+      view.dispatch({
+        changes: { from, to, insert },
+        selection: { anchor: from + insert.length },
+      })
+    }
+  }
   if (prop.type === 'array') return `${key}": [`
+  if (prop.type === 'object' && prop.children) {
+    // Object — scaffold with { and opening quote for first child key
+    return (view, completion, from, to) => {
+      const line = view.state.doc.lineAt(from)
+      const baseIndent = line.text.match(/^\s*/)[0]
+      const insert = `${key}": {\n${baseIndent}  "`
+      view.dispatch({
+        changes: { from, to, insert },
+        selection: { anchor: from + insert.length },
+      })
+    }
+  }
   if (prop.type === 'object') return `${key}": {`
   if (prop.type === 'boolean') return `${key}": `
   if (prop.type === 'number') return `${key}": `
