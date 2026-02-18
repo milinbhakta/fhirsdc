@@ -1,35 +1,187 @@
 @import './base.css';
 
 #app {
-  max-width: 1280px;
+  max-width: 1200px;
   margin: 0 auto;
-  padding: 2rem;
-  font-weight: normal;
+  padding: 1.25rem;
 }
 
-a,
-.green {
-  text-decoration: none;
-  color: hsla(160, 100%, 37%, 1);
-  transition: 0.4s;
-  padding: 3px;
+a {
+  color: var(--color-heading);
 }
 
-@media (hover: hover) {
-  a:hover {
-    background-color: hsla(160, 100%, 37%, 0.2);
-  }
+.workspace {
+  display: grid;
+  gap: 1rem;
 }
 
-@media (min-width: 1024px) {
-  body {
-    display: flex;
-    place-items: center;
-  }
+.card {
+  border: 1px solid var(--color-border);
+  background: var(--color-background-soft);
+  border-radius: 14px;
+  padding: 1rem;
+}
 
+.panel {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.label {
+  font-weight: 600;
+}
+
+.input,
+.editor {
+  width: 100%;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-background);
+  color: var(--color-text);
+  padding: 0.55rem 0.65rem;
+}
+
+.row .input {
+  width: auto;
+  min-width: 210px;
+}
+
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.tab-btn,
+.primary-btn,
+.example-btn {
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-background);
+  color: var(--color-text);
+  padding: 0.4rem 0.65rem;
+  cursor: pointer;
+}
+
+.tab-btn.active,
+.primary-btn {
+  background: var(--color-background-mute);
+  border-color: var(--color-border-hover);
+}
+
+.btn-row {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.error {
+  color: #d1495b;
+}
+
+.output,
+.tree-shell {
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 0.75rem;
+  background: var(--color-background);
+  overflow: auto;
+}
+
+.output {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.example-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.issue-list {
+  list-style: disc;
+  margin-left: 1.2rem;
+  display: grid;
+  gap: 0.25rem;
+}
+
+.mapping-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 0.7rem;
+}
+
+.mapping-card {
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-background);
+  padding: 0.65rem;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.mapping-card h5 {
+  font-size: 0.95rem;
+}
+
+.property-guide {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.guide-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.6rem;
+}
+
+.guide-card {
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-background);
+  padding: 0.65rem;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.guide-card h5 {
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+
+.issue-list .success {
+  color: #2d8a39;
+}
+
+.steps {
+  margin-left: 1.2rem;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.hint {
+  color: var(--color-text-soft);
+}
+
+h2,
+h3,
+h4 {
+  color: var(--color-heading);
+}
+
+@media (max-width: 700px) {
   #app {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    padding: 0 2rem;
+    padding: 0.9rem;
+  }
+
+  .card {
+    padding: 0.8rem;
   }
 }
