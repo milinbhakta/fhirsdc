@@ -52,18 +52,38 @@ h1 {
   display: flex;
   flex-wrap: wrap;
   gap: 0.6rem;
+  align-items: center;
+  justify-content: flex-end;
 }
 
 .top-nav a {
   text-decoration: none;
   border: 1px solid var(--color-border);
   border-radius: 10px;
-  padding: 0.3rem 0.7rem;
+  padding: 0.35rem 0.75rem;
+  line-height: 1.2;
+  white-space: nowrap;
 }
 
 .top-nav a.router-link-exact-active {
   border-color: var(--color-border-hover);
   background: var(--color-background-mute);
   color: var(--color-heading);
+}
+
+@media (max-width: 700px) {
+  .app-header {
+    align-items: stretch;
+  }
+
+  .top-nav {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .top-nav a {
+    flex: 1;
+    text-align: center;
+  }
 }
 </style>

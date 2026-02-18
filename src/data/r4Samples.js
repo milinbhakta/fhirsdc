@@ -774,3 +774,100 @@ export const fhirR4FhirPathFunctionGroups = [
     ],
   },
 ]
+
+export const fhirPathGrammarCheatSheet = [
+  {
+    title: 'Path Navigation',
+    pattern: 'collection.property.subProperty',
+    description: 'Traverse elements; each step returns a collection.',
+    example: "item.where(linkId='vitals').item.linkId",
+  },
+  {
+    title: 'Filtering',
+    pattern: 'collection.where(criteria)',
+    description: 'Keep elements where criteria evaluates true.',
+    example: "item.where(type='group').linkId",
+  },
+  {
+    title: 'Projection',
+    pattern: 'collection.select(expression)',
+    description: 'Transform each element to another value/collection.',
+    example: 'item.select(linkId)',
+  },
+  {
+    title: 'Variables',
+    pattern: 'let var := expression; expressionUsingVar',
+    description: 'Bind intermediate values for readable formulas.',
+    example:
+      "let h := item.where(linkId='height').answer.valueInteger.first(); let w := item.where(linkId='weight').answer.valueInteger.first(); w / ((h/100)*(h/100))",
+  },
+  {
+    title: 'Conditional',
+    pattern: 'iif(condition, trueExpr, falseExpr)',
+    description: 'Inline conditional expression with fallback.',
+    example: "iif(answer.exists(), answer.first(), 'unknown')",
+  },
+  {
+    title: 'Boolean Composition',
+    pattern: '(expr1 and expr2) or expr3',
+    description: 'Combine logical predicates in criteria.',
+    example: "item.where(required=true and type!='group')",
+  },
+  {
+    title: 'Collection Aggregation',
+    pattern: 'collection.function()',
+    description: 'Aggregate / summarize collection values.',
+    example: 'item.answer.valueBoolean.where($this=true).count()',
+  },
+]
+
+export const fhirPathSyntaxRules = [
+  'FHIRPath always works with collections, even when one element is expected.',
+  'String literals use single quotes: \"status = \'active\'\".',
+  'Use = for equality and != for inequality.',
+  'Use first() when exactly one value is needed from a collection.',
+  'Use exists() / empty() before arithmetic when values may be missing.',
+  'Functions are case-sensitive in many implementations; keep canonical names.',
+  'Use parentheses generously to avoid precedence ambiguity.',
+  'For coded answers, compare .code when you need code matching logic.',
+]
+
+export const sdcExpressionContextCheatSheet = [
+  {
+    area: 'calculatedExpression',
+    context: 'Evaluates in QuestionnaireResponse context for the current form state.',
+    notes:
+      'Typically used on readOnly calculated items; reference answers via linkId navigation and return value type matching the question type.',
+    example:
+      "item.where(linkId='vitals').item.where(linkId='weight').answer.valueInteger.first()",
+  },
+  {
+    area: 'initialExpression',
+    context: 'Evaluates for initial prepopulation before user edits.',
+    notes:
+      'Often uses launch context variables (implementation-defined) and/or patient data to seed defaults.',
+    example: "%patient.birthDate",
+  },
+  {
+    area: 'enableWhenExpression',
+    context: 'Evaluates to boolean controlling visibility/enabling of an item.',
+    notes:
+      'Prefer explicit true/false output and guard nulls with exists()/empty() checks.',
+    example:
+      "item.where(linkId='warning-signs').item.where(linkId='headache').answer.valueBoolean.first() = true",
+  },
+  {
+    area: 'launchContext',
+    context: 'Named variables supplied by the app/server at launch time.',
+    notes:
+      'Common names include %patient, %encounter, %user (profile dependent); availability depends on implementation.',
+    example: "%patient.name.given.first()",
+  },
+  {
+    area: '%resource and current focus',
+    context: 'Current evaluation node is typically the active item/response scope.',
+    notes:
+      'Use %resource for full root resource access when local scope is not enough.',
+    example: "%resource.item.where(linkId='demographics').item.where(linkId='dob')",
+  },
+]
