@@ -262,31 +262,107 @@ const playgroundTemplates = [
       resourceType: 'Questionnaire',
       id: 'validation-demo',
       status: 'active',
-      title: 'Validation Demo',
+      title: 'Custom Validation Demo',
       item: [
         {
           linkId: 'dob',
           text: 'Date of Birth',
           type: 'date',
           required: true,
+          extension: [
+            {
+              url: 'http://hl7.org/fhir/StructureDefinition/questionnaire-constraint',
+              extension: [
+                { url: 'key', valueId: 'dob-past' },
+                { url: 'severity', valueCode: 'error' },
+                { url: 'human', valueString: 'Date of Birth must be in the past.' },
+                {
+                  url: 'expression',
+                  valueString:
+                    "%resource.item.where(linkId='dob').answer.valueDate.empty() or %resource.item.where(linkId='dob').answer.valueDate <= today()",
+                },
+              ],
+            },
+          ],
         },
         {
           linkId: 'systolic',
           text: 'Systolic BP (mmHg)',
           type: 'integer',
           required: true,
+          extension: [
+            {
+              url: 'http://hl7.org/fhir/StructureDefinition/questionnaire-constraint',
+              extension: [
+                { url: 'key', valueId: 'bp-sys-range' },
+                { url: 'severity', valueCode: 'error' },
+                { url: 'human', valueString: 'Systolic BP must be between 60 and 300 mmHg.' },
+                {
+                  url: 'expression',
+                  valueString:
+                    "%resource.item.where(linkId='systolic').answer.valueInteger.empty() or (%resource.item.where(linkId='systolic').answer.valueInteger >= 60 and %resource.item.where(linkId='systolic').answer.valueInteger <= 300)",
+                },
+              ],
+            },
+          ],
         },
         {
           linkId: 'diastolic',
           text: 'Diastolic BP (mmHg)',
           type: 'integer',
           required: true,
+          extension: [
+            {
+              url: 'http://hl7.org/fhir/StructureDefinition/questionnaire-constraint',
+              extension: [
+                { url: 'key', valueId: 'bp-dia-range' },
+                { url: 'severity', valueCode: 'error' },
+                { url: 'human', valueString: 'Diastolic BP must be between 40 and 200 mmHg.' },
+                {
+                  url: 'expression',
+                  valueString:
+                    "%resource.item.where(linkId='diastolic').answer.valueInteger.empty() or (%resource.item.where(linkId='diastolic').answer.valueInteger >= 40 and %resource.item.where(linkId='diastolic').answer.valueInteger <= 200)",
+                },
+              ],
+            },
+            {
+              url: 'http://hl7.org/fhir/StructureDefinition/questionnaire-constraint',
+              extension: [
+                { url: 'key', valueId: 'bp-cross' },
+                { url: 'severity', valueCode: 'error' },
+                {
+                  url: 'human',
+                  valueString: 'Systolic BP must be greater than Diastolic BP.',
+                },
+                {
+                  url: 'expression',
+                  valueString:
+                    "%resource.item.where(linkId='systolic').answer.valueInteger.empty() or %resource.item.where(linkId='diastolic').answer.valueInteger.empty() or (%resource.item.where(linkId='systolic').answer.valueInteger > %resource.item.where(linkId='diastolic').answer.valueInteger)",
+                },
+              ],
+            },
+          ],
         },
         {
           linkId: 'email',
           text: 'Contact email',
           type: 'string',
-          maxLength: 254,
+          maxLength: 50,
+          extension: [
+            {
+              url: 'http://hl7.org/fhir/StructureDefinition/questionnaire-constraint',
+              extension: [
+                { url: 'key', valueId: 'email-at' },
+                { url: 'severity', valueCode: 'warning' },
+                { url: 'human', valueString: 'Email should contain an @ symbol.' },
+                {
+                  url: 'expression',
+                  valueString:
+                    "%resource.item.where(linkId='email').answer.valueString.empty() or %resource.item.where(linkId='email').answer.valueString.contains('@')",
+                },
+              ],
+            },
+          ],
         },
       ],
     },

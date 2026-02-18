@@ -12,6 +12,8 @@ const props = defineProps({
 const emit = defineEmits(['response-updated'])
 
 const answers = reactive({})
+const touched = reactive({})
+const validationErrors = reactive({})
 
 const items = computed(() => props.questionnaire.item ?? [])
 
@@ -277,6 +279,71 @@ function clearDisabledAnswers() {
   return changed
 }
 
+function getConstraints(item) {
+  if (!item?.extension?.length) return []
+  return item.extension
+    .filter((ext) => ext.url === 'http://hl7.org/fhir/StructureDefinition/questionnaire-constraint')
+    .map((ext) => {
+      const sub = ext.extension || []
+      return {
+        key: sub.find((e) => e.url === 'key')?.valueId || '',
+        severity: sub.find((e) => e.url === 'severity')?.valueCode || 'error',
+        human: sub.find((e) => e.url === 'human')?.valueString || 'Validation failed',
+        expression: sub.find((e) => e.url === 'expression')?.valueString || '',
+      }
+    })
+    .filter((c) => c.expression)
+}
+
+function hasConstraints(item) {
+  return getConstraints(item).length > 0
+}
+
+function evaluateAllValidation() {
+  const response = responseFromAnswers.value
+
+  flatQuestions.value.forEach((item) => {
+    const errors = []
+    const isTouched = touched[item.linkId]
+    const value = answers[item.linkId]
+    const hasValue = value !== undefined && value !== '' && value !== null
+
+    if (item.required && isTouched && !hasValue) {
+      errors.push('This field is required.')
+    }
+
+    if (item.maxLength && typeof value === 'string' && value.length > item.maxLength) {
+      errors.push(`Maximum length is ${item.maxLength} characters (current: ${value.length}).`)
+    }
+
+    if (isTouched || hasValue) {
+      getConstraints(item).forEach((constraint) => {
+        try {
+          const result = fhirpath.evaluate(response, constraint.expression, {
+            resource: response,
+            questionnaire: props.questionnaire,
+          })
+          if (result.length > 0 && result[0] === false) {
+            errors.push(
+              constraint.severity === 'warning'
+                ? `\u26A0 ${constraint.human}`
+                : constraint.human,
+            )
+          }
+        } catch {
+          // Expression may reference absent data \u2014 skip silently
+        }
+      })
+    }
+
+    if (errors.length) {
+      validationErrors[item.linkId] = errors
+    } else {
+      delete validationErrors[item.linkId]
+    }
+  })
+}
+
 function refreshStateAndEmit() {
   let attempts = 0
   let changed = true
@@ -288,6 +355,7 @@ function refreshStateAndEmit() {
     attempts += 1
   }
 
+  evaluateAllValidation()
   emit('response-updated', responseFromAnswers.value)
 }
 
@@ -296,8 +364,16 @@ function onInput(item, value) {
     return
   }
 
+  touched[item.linkId] = true
   answers[item.linkId] = value
   refreshStateAndEmit()
+}
+
+function onBlur(item) {
+  if (!touched[item.linkId]) {
+    touched[item.linkId] = true
+    evaluateAllValidation()
+  }
 }
 
 watch(
@@ -305,6 +381,12 @@ watch(
   () => {
     Object.keys(answers).forEach((key) => {
       delete answers[key]
+    })
+    Object.keys(touched).forEach((key) => {
+      delete touched[key]
+    })
+    Object.keys(validationErrors).forEach((key) => {
+      delete validationErrors[key]
     })
     applyInitialValues()
     refreshStateAndEmit()
@@ -330,6 +412,7 @@ onMounted(() => {
         <span v-if="item.required" class="required-pill">required</span>
         <span v-if="item.enableWhen?.length" class="logic-pill">enableWhen</span>
         <span v-if="isCalculated(item)" class="logic-pill">calculatedExpression</span>
+        <span v-if="hasConstraints(item)" class="logic-pill constraint-pill">constraint</span>
       </label>
 
       <textarea
@@ -337,18 +420,22 @@ onMounted(() => {
         :id="item.linkId"
         rows="3"
         class="question-input"
+        :class="{ 'question-input--invalid': validationErrors[item.linkId]?.length }"
         :value="answers[item.linkId] || ''"
         :disabled="isCalculated(item)"
         @input="onInput(item, $event.target.value)"
+        @blur="onBlur(item)"
       />
 
       <select
         v-else-if="item.type === 'choice'"
         :id="item.linkId"
         class="question-input"
+        :class="{ 'question-input--invalid': validationErrors[item.linkId]?.length }"
         :value="answers[item.linkId] || ''"
         :disabled="isCalculated(item)"
         @change="onInput(item, $event.target.value)"
+        @blur="onBlur(item)"
       >
         <option value="">Select option</option>
         <option
@@ -368,6 +455,7 @@ onMounted(() => {
         :checked="Boolean(answers[item.linkId])"
         :disabled="isCalculated(item)"
         @change="onInput(item, $event.target.checked)"
+        @blur="onBlur(item)"
       />
 
       <input
@@ -376,10 +464,18 @@ onMounted(() => {
         :type="item.type === 'integer' || item.type === 'decimal' ? 'number' : item.type === 'date' ? 'date' : 'text'"
         :step="item.type === 'decimal' ? '0.01' : undefined"
         class="question-input"
+        :class="{ 'question-input--invalid': validationErrors[item.linkId]?.length }"
         :value="answers[item.linkId] || ''"
         :disabled="isCalculated(item)"
         @input="onInput(item, $event.target.value)"
+        @blur="onBlur(item)"
       />
+
+      <div v-if="validationErrors[item.linkId]?.length" class="validation-errors">
+        <div v-for="(msg, msgIdx) in validationErrors[item.linkId]" :key="msgIdx" class="validation-msg">
+          {{ msg }}
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -435,5 +531,33 @@ onMounted(() => {
 .empty-state {
   color: var(--color-text-soft);
   font-style: italic;
+}
+
+.question-input--invalid {
+  border-color: #dc2626 !important;
+  box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.15);
+}
+
+.validation-errors {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.validation-msg {
+  font-size: 0.8rem;
+  color: #dc2626;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.35rem;
+}
+
+.validation-msg::before {
+  content: '\26A0';
+  flex-shrink: 0;
+}
+
+.constraint-pill {
+  border-color: #e87040 !important;
+  color: #e87040;
 }
 </style>
