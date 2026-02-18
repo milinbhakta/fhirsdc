@@ -136,26 +136,7 @@ body {
   background: rgba(0,0,0,0.2);
 }
 
-.fplab-sidebar-link {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.85rem;
-  padding: 0.55rem 0.75rem;
-  border-radius: 8px;
-  border: 1px solid rgba(99,102,241,0.3);
-  background: rgba(99,102,241,0.08);
-  color: #c7d2fe;
-  font-size: 0.85rem;
-  font-weight: 600;
-  text-decoration: none;
-  transition: all 0.15s;
-}
 
-.fplab-sidebar-link:hover {
-  background: rgba(99,102,241,0.2);
-  color: #fff;
-}
 
 /* MAIN CONTENT */
 .main-content {
@@ -440,6 +421,129 @@ body {
 .playground-shell .pane-body {
   flex: 1;
   overflow: auto;
+}
+
+/* Playground Mode Bar */
+.pg-mode-bar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+  flex-wrap: wrap;
+}
+.pg-mode-tabs {
+  display: flex;
+  gap: 0;
+  background: var(--c-bg-secondary);
+  border: 1px solid var(--c-border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.pg-mode-tab {
+  padding: 0.45rem 1rem;
+  border: none;
+  background: none;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  color: var(--c-text-secondary);
+  transition: all 0.15s;
+}
+.pg-mode-tab.active {
+  background: var(--c-accent);
+  color: #fff;
+}
+.pg-mode-tab:hover:not(.active) {
+  background: rgba(99,102,241,0.1);
+}
+
+/* FHIRPath Explorer specific */
+.fp-history-panel {
+  background: var(--c-bg-primary);
+  border: 1px solid var(--c-border);
+  border-radius: 8px;
+  margin-bottom: 0.75rem;
+  overflow: hidden;
+}
+.fp-history-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  width: 100%;
+  padding: 0.4rem 0.75rem;
+  border: none;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+  font-size: 0.8rem;
+  transition: background 0.1s;
+}
+.fp-history-item:hover {
+  background: var(--c-bg-secondary);
+}
+.fp-history-item code {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.78rem;
+  color: var(--c-accent);
+}
+.fp-line-numbers {
+  padding: 0.75rem 0;
+  min-width: 3rem;
+  text-align: right;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: var(--c-text-tertiary);
+  user-select: none;
+  border-right: 1px solid var(--c-border);
+  background: var(--c-bg-secondary);
+  padding-right: 0.5rem;
+  overflow: hidden;
+}
+.fp-editor-textarea {
+  flex: 1;
+  border: none;
+  outline: none;
+  resize: none;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  padding: 0.75rem;
+  background: var(--c-bg-primary);
+  color: var(--c-text-primary);
+  white-space: pre;
+  tab-size: 2;
+}
+.fp-example-btn {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--c-border);
+  border-radius: 6px;
+  background: var(--c-bg-primary);
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s;
+}
+.fp-example-btn:hover {
+  border-color: var(--c-accent);
+  background: rgba(99,102,241,0.05);
+}
+.fp-example-btn.active {
+  border-color: var(--c-accent);
+  background: rgba(99,102,241,0.1);
+}
+
+.input-select {
+  padding: 0.35rem 0.6rem;
+  border: 1px solid var(--c-border);
+  border-radius: 6px;
+  background: var(--c-bg-secondary);
+  color: var(--c-text-primary);
+  outline: none;
+  cursor: pointer;
 }
 
 .btn-sm {

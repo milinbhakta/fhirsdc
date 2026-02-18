@@ -10,11 +10,6 @@ const router = createRouter({
       component: HomeView,
     },
     {
-      path: '/fhirpath-lab',
-      name: 'fhirpath-lab',
-      component: () => import('../views/FhirPathLabView.vue'),
-    },
-    {
       path: '/about',
       name: 'learning-notes',
       component: () => import('../views/AboutView.vue'),
