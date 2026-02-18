@@ -179,41 +179,47 @@ function emitSelectNode(payload) {
   padding: 0;
   line-height: 1;
   cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+}
+
+.node-self:hover {
+  background: var(--c-bg-app);
+}
+
+.node-self.selected {
+  background: var(--c-accent-light);
+  color: var(--c-accent);
 }
 
 .node-key {
   font-weight: 600;
-  color: var(--color-heading);
-}
-
-.node-key.has-tooltip {
-  text-decoration: underline dotted;
-  text-underline-offset: 0.15rem;
+  color: var(--c-text-primary);
+  font-family: 'Menlo', monospace;
+  font-size: 0.85rem;
 }
 
 .help-dot {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1rem;
-  height: 1rem;
-  border-radius: 999px;
-  border: 1px solid var(--color-border);
-  font-size: 0.72rem;
-  color: var(--color-text-soft);
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--c-border);
+  font-size: 0.65rem;
+  color: var(--c-text-secondary);
+  margin-left: 0.35rem;
 }
 
 .node-value {
-  color: var(--color-text);
-  overflow-wrap: anywhere;
-}
-
-.node-kind {
-  color: var(--color-text-soft);
-  font-size: 0.85rem;
+  color: var(--c-text-secondary);
+  margin-left: 0.5rem;
 }
 
 .node-children {
-  padding-left: 0.5rem;
+  padding-left: 1.25rem;
+  border-left: 1px solid var(--c-border);
+  margin-left: 0.5rem;
 }
 </style>

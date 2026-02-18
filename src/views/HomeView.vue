@@ -5,6 +5,7 @@ import DynamicQuestionnaireForm from '@/components/DynamicQuestionnaireForm.vue'
 import JsonTooltipEditor from '@/components/JsonTooltipEditor.vue'
 import ResourceTreeNode from '@/components/ResourceTreeNode.vue'
 import { getPropertyGuide } from '@/data/fhirPropertyTooltips'
+import { learningModules } from '@/data/learningModules'
 import {
   fhirPathGrammarCheatSheet,
   fhirPathSyntaxRules,
@@ -19,28 +20,44 @@ import {
 
 const tabs = [
   {
+    id: 'intro',
+    label: 'Module 0: Basics',
+    goal: 'Start here.',
+    icon: '🏠'
+  },
+  {
     id: 'tree',
-    label: 'Step 1: Understand Resources',
-    goal: 'Learn Questionnaire and QuestionnaireResponse structure with interactive tree + glossary.',
+    label: 'Module 1: Structure',
+    goal: 'Understand Questionnaire nesting.',
+    icon: 'hierarchy'
   },
   {
     id: 'form',
-    label: 'Step 2: Build and Capture',
-    goal: 'Render forms from Questionnaire, answer questions, and inspect live QuestionnaireResponse.',
+    label: 'Module 2: Rendering',
+    goal: 'Build forms & responses.',
+    icon: 'form'
   },
   {
     id: 'fhirpath',
-    label: 'Step 3: Validate with FHIRPath',
-    goal: 'Run expressions to verify logic, extraction values, and calculated fields.',
+    label: 'Module 3: Logic Lab',
+    goal: 'Test extraction & calculation.',
+    icon: 'code'
+  },
+  {
+    id: 'quiz',
+    label: 'Module 4: Quiz',
+    goal: 'Test your knowledge.',
+    icon: 'check-circle'
   },
   {
     id: 'authoring',
-    label: 'Step 4: Authoring & Cheat Sheets',
-    goal: 'Use concise reference notes for writing SDC artifacts and expressions.',
+    label: 'Reference',
+    goal: 'Cheat sheets & patterns.',
+    icon: 'book'
   },
 ]
 
-const activeTab = ref('tree')
+const activeTab = ref('intro')
 const authoringSection = ref('basics')
 const selectedScenarioId = ref(sampleScenarios[0]?.id || 'baseline')
 const cheatSheetQuery = ref('')
@@ -59,6 +76,86 @@ const fhirPathError = ref('')
 
 const generatedResponse = ref(sampleQuestionnaireResponse)
 
+// Quiz State
+const quizQuestions = [
+  {
+    question: "What is the primary goal of the FHIR Structured Data Capture (SDC) implementation guide?",
+    options: [
+      "To define the core FHIR resources for patient demographics",
+      "To enhance the base Questionnaire resource with advanced behaviors like pre-population, calculated scores, and form rendering",
+      "To replace the Questionnaire resource with a binary document format",
+      "To restrict the use of FHIRPath in clinical settings"
+    ],
+    answer: 1
+  },
+  {
+    question: "Which `item.type` in a FHIR Questionnaire represents a question with a set of allowed answers where multiple selections may be permitted?",
+    options: [
+      "group",
+      "string",
+      "choice",
+      "boolean"
+    ],
+    answer: 2
+  },
+  {
+    question: "In a FHIRPath expression used within an SDC Questionnaire, what does `%resource` typically refer to?",
+    options: [
+      "The FHIR server's root URL",
+      "The QuestionnaireResponse currently being populated or authored",
+      "The Patient resource associated with the form",
+      "The structure definition of the Questionnaire"
+    ],
+    answer: 1
+  },
+  {
+    question: "Which extension is used to specify that a Questionnaire item should be hidden until a specific condition (expressed in FHIRPath) is met?",
+    options: [
+      "enableWhen",
+      "initialExpression",
+      "variable",
+      "itemControl"
+    ],
+    answer: 0
+  },
+  {
+    question: "How are `linkId` elements used effectively in a QuestionnaireResponse?",
+    options: [
+      "They link to external web pages for help text",
+      "They are optional labels for human readability only",
+      "They must uniquely correspond to the `linkId` of the items in the defining Questionnaire to map answers back to questions",
+      "They are automatically generated hashes used for security"
+    ],
+    answer: 2
+  }
+]
+
+const quizAnswers = ref({})
+const quizSubmitted = ref(false)
+
+const quizScore = computed(() => {
+  if (!quizSubmitted.value) return 0
+  let score = 0
+  quizQuestions.forEach((q, idx) => {
+    if (quizAnswers.value[idx] === q.answer) {
+      score++
+    }
+  })
+  return score
+})
+
+const quizPercentage = computed(() => Math.round((quizScore.value / quizQuestions.length) * 100))
+
+function submitQuiz() {
+  quizSubmitted.value = true
+}
+
+function resetQuiz() {
+  quizAnswers.value = {}
+  quizSubmitted.value = false
+}
+
+
 const selectedJson = computed(() =>
   selectedResourceType.value === 'Questionnaire' ? questionnaireJson.value : responseJson.value,
 )
@@ -70,9 +167,11 @@ const activeScenario = computed(
 const activeTabMeta = computed(() => tabs.find((tab) => tab.id === activeTab.value) || tabs[0])
 const activeStepIndex = computed(() => tabs.findIndex((tab) => tab.id === activeTab.value))
 const activeStepNumber = computed(() => activeStepIndex.value + 1)
-const totalSteps = tabs.length
-const completionPercent = computed(() => Math.round((activeStepNumber.value / totalSteps) * 100))
-const breadcrumbText = computed(() => `Home / Learning Flow / ${activeTabMeta.value.label}`)
+const totalSteps = tabs.length - 1 // Subtract Home
+const completionPercent = computed(() => {
+    if (activeTab.value === 'intro') return 0
+    return Math.round((activeStepIndex.value / totalSteps) * 100)
+})
 
 const activeFhirPathExamples = computed(() => activeScenario.value?.fhirPathExamples || [])
 const activeExtractionMappings = computed(() => activeScenario.value?.extractionMappingExamples || [])
@@ -322,22 +421,18 @@ function useNodePathAsExpression() {
   
   let expr = selectedTreeNode.value.path
   
-  // "root" is just the placeholder for the top-level object
   if (expr === 'root') {
     expr = '' 
   }
 
-  // If we ever have "root.something", strip "root."
   if (expr.startsWith('root.')) {
      expr = expr.substring(5)
   }
 
-  // Switch tab
   activeTab.value = 'fhirpath'
   fhirPathExpression.value = expr
   selectedFhirPathResource.value = selectedResourceType.value
   
-  // Force immediate run (bypass debounce)
   runFhirPath()
 }
 
@@ -345,7 +440,7 @@ function validateQuestionnaire(resource) {
   const issues = []
 
   if (!resource || resource.resourceType !== 'Questionnaire') {
-    issues.push("resourceType should be 'Questionnaire'.")
+    issues.push('resourceType should be Questionnaire.')
   }
 
   if (!resource?.status) {
@@ -535,398 +630,344 @@ function buildExtractionBundle(response) {
 </script>
 
 <template>
-  <main class="workspace">
-    <section class="intro card">
-      <h2>FHIR SDC (R4) Practice Workspace</h2>
-      <p>
-        Follow the guided 4-step flow below. Each step has one clear goal so you always know what to do
-        next while learning FHIR SDC.
-      </p>
-
-      <div class="progress-shell">
-        <p class="breadcrumb">You are here: {{ breadcrumbText }}</p>
-        <div class="progress-inline">
-          <span class="progress-pill">Step {{ activeStepNumber }}/{{ totalSteps }}</span>
-          <span class="progress-percent">{{ completionPercent }}% complete</span>
-        </div>
-        <div class="progress-bar" role="progressbar" :aria-valuenow="completionPercent" aria-valuemin="0" aria-valuemax="100">
-          <span class="progress-fill" :style="{ width: `${completionPercent}%` }" />
-        </div>
+  <div id="app">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <h1 class="brand">FHIR SDC Lab</h1>
       </div>
-
-      <div class="row">
-        <label class="label" for="scenario-selector">Scenario</label>
-        <select id="scenario-selector" v-model="selectedScenarioId" class="input">
-          <option v-for="scenario in sampleScenarios" :key="scenario.id" :value="scenario.id">
-            {{ scenario.label }}
-          </option>
-        </select>
-      </div>
-
-      <p v-if="activeScenario?.description" class="hint">{{ activeScenario.description }}</p>
-    </section>
-
-    <section class="learning-flow card">
-      <h3>Learning Flow</h3>
-      <p class="hint">Start at Step 1 and move right. You can switch steps anytime.</p>
-
-      <div class="flow-grid">
-        <button
-          v-for="(tab, index) in tabs"
+      
+      <nav class="sidebar-nav">
+        <button 
+          v-for="tab in tabs" 
           :key="tab.id"
-          type="button"
-          class="flow-step"
+          class="nav-item" 
           :class="{ active: activeTab === tab.id }"
           @click="goToStep(tab.id)"
         >
-          <p class="flow-step-index">{{ index + 1 }}</p>
-          <p class="flow-step-status">{{ activeTab === tab.id ? 'You are here' : 'Open step' }}</p>
-          <p class="flow-step-title">{{ tab.label }}</p>
-          <p class="flow-step-goal">{{ tab.goal }}</p>
+          <span>{{ tab.label }}</span>
+          <span v-if="tab.id === activeTab" class="nav-badge">Active</span>
         </button>
-      </div>
-    </section>
+      </nav>
 
-    <section class="step-context card">
-      <h3>{{ activeTabMeta.label }}</h3>
-      <p>{{ activeTabMeta.goal }}</p>
-      <div class="step-nav">
-        <button
-          type="button"
-          class="example-btn"
-          :disabled="activeStepIndex <= 0"
-          @click="goToPreviousStep"
-        >
-          Previous Step
-        </button>
-
-        <span class="step-nav-label">Step {{ activeStepNumber }} of {{ totalSteps }}</span>
-
-        <button
-          type="button"
-          class="primary-btn"
-          :disabled="activeStepIndex >= tabs.length - 1"
-          @click="goToNextStep"
-        >
-          {{ activeStepIndex >= tabs.length - 1 ? 'You reached final step' : 'Next Step' }}
-        </button>
-      </div>
-    </section>
-
-    <section v-if="activeTab === 'tree'" class="card panel">
-      <h3>Step 1 — Resource Explorer</h3>
-      <p class="hint">
-        Goal: understand what each property means and how Questionnaire / QuestionnaireResponse are nested.
-      </p>
-
-      <div class="row">
-        <label class="label" for="resource-selector">Resource</label>
-        <select id="resource-selector" v-model="selectedResourceType" class="input">
-          <option value="Questionnaire">Questionnaire</option>
-          <option value="QuestionnaireResponse">QuestionnaireResponse</option>
-        </select>
-      </div>
-
-      <div class="btn-row">
-        <button type="button" class="example-btn" @click="expandAllTreeNodes">Expand all</button>
-        <button type="button" class="example-btn" @click="collapseAllTreeNodes">Collapse all</button>
-      </div>
-
-      <JsonTooltipEditor
-        :model-value="selectedResourceType === 'Questionnaire' ? questionnaireJson : responseJson"
-        :resource-type="selectedResourceType"
-        :min-height="340"
-        @update:model-value="updateSelectedResourceJson"
-      />
-
-      <p v-if="selectedParsed.error" class="error">JSON parse error: {{ selectedParsed.error }}</p>
-
-      <div v-else class="tree-shell">
-        <ul>
-          <ResourceTreeNode
-            node-key="root"
-            :node-value="activeTreeData"
-            :resource-type="selectedTreeResourceType"
-            :selected-path="selectedTreeNode?.path || ''"
-            :tree-control-mode="treeControlMode"
-            :tree-control-token="treeControlToken"
-            @select-node="onTreeNodeSelected"
-          />
-        </ul>
-      </div>
-
-      <div v-if="selectedTreeNode" class="selected-node card-lite">
-        <h4>Selected Node</h4>
-        <p><strong>Path:</strong> {{ selectedTreeNode.path }}</p>
-        <p><strong>Kind:</strong> {{ selectedTreeNode.kind }}</p>
-        <p><strong>Description:</strong> {{ selectedTreeNode.tooltip || 'No tooltip for this key.' }}</p>
-        <div class="btn-row">
-            <button class="primary-btn" @click="useNodePathAsExpression">
-                Query this path →
-            </button>
-        </div>
-        <pre class="output">{{ JSON.stringify(selectedTreeNode.value, null, 2) }}</pre>
-      </div>
-
-      <div v-if="!selectedParsed.error" class="property-guide">
-        <h4>Property Glossary ({{ selectedTreeResourceType }})</h4>
-        <p class="hint">Hover any dotted property key in the tree to see the same tooltip details.</p>
-
-        <div class="guide-grid">
-          <article
-            v-for="([propertyName, description], index) in propertyGuideEntries"
-            :key="`${selectedTreeResourceType}-${propertyName}-${index}`"
-            class="guide-card"
-          >
-            <h5>{{ propertyName }}</h5>
-            <p>{{ description }}</p>
-          </article>
+      <div class="sidebar-footer">
+        <div class="flex-col gap-2">
+            <div style="display:flex; justify-content:space-between;">
+                <span style="font-size:0.8rem">Progress</span>
+                <span style="font-size:0.8rem; font-weight:bold">{{ completionPercent }}%</span>
+            </div>
+            <div style="width:100%; height:8px; background:rgba(255,255,255,0.1); border-radius:4px; overflow:hidden;">
+                 <div :style="{ width: completionPercent + '%', height:'100%', background:'#3b82f6' }"></div>
+            </div>
         </div>
       </div>
-    </section>
+    </aside>
 
-    <section v-if="activeTab === 'fhirpath'" class="card panel">
-      <h3>Step 3 — FHIRPath Validation Lab</h3>
-      <p class="hint">
-        Goal: test expressions against real resources to validate calculations, conditions, and extraction logic.
-      </p>
-
-      <div class="row">
-        <label class="label" for="fhirpath-target">Evaluate against</label>
-        <select id="fhirpath-target" v-model="selectedFhirPathResource" class="input">
-          <option value="Questionnaire">Questionnaire</option>
-          <option value="QuestionnaireResponse">QuestionnaireResponse</option>
-          <option value="GeneratedResponse">Generated form response</option>
-        </select>
-      </div>
-
-      <label class="label" for="fhirpath-expression">FHIRPath expression</label>
-      <textarea id="fhirpath-expression" v-model="fhirPathExpression" class="editor" rows="5" />
-
-      <div class="btn-row">
-        <button type="button" class="primary-btn" @click="runFhirPath">Run Expression</button>
-      </div>
-
-      <p v-if="fhirPathError" class="error">{{ fhirPathError }}</p>
-      <pre v-else-if="fhirPathResult" class="output">{{ fhirPathResult }}</pre>
-
-      <div class="example-grid">
-        <button
-          v-for="example in activeFhirPathExamples"
-          :key="example.label"
-          type="button"
-          class="example-btn"
-          @click="applyExample(example.expression)"
-        >
-          {{ example.label }}
-        </button>
-      </div>
-    </section>
-
-    <section v-if="activeTab === 'form'" class="card panel">
-      <h3>Step 2 — Form Builder + Response Capture</h3>
-
-      <p class="hint">
-        Goal: convert Questionnaire into an interactive form, answer it, and inspect generated
-        QuestionnaireResponse + extraction outputs.
-      </p>
-
-      <JsonTooltipEditor
-        v-model="questionnaireJson"
-        resource-type="Questionnaire"
-        :min-height="300"
-      />
-
-      <p v-if="questionnaireParsed.error" class="error">{{ questionnaireParsed.error }}</p>
-
-      <template v-else>
-        <ul class="issue-list">
-          <li
-            v-for="(issue, index) in questionnaireIssues"
-            :key="`issue-${index}`"
-            :class="{ success: issue.startsWith('No structural issues') }"
+    <!-- Main Content -->
+    <main class="main-content">
+      <!-- Top Bar -->
+      <header class="top-bar">
+        <div class="page-title">
+          <h2>{{ activeTabMeta?.label || 'Home' }}</h2>
+        </div>
+        
+        <div class="top-actions">
+           <label for="scenario-select" style="font-size: 0.85rem; font-weight: 500; color: var(--c-text-secondary);">Scenario:</label>
+           <select id="scenario-select" v-model="selectedScenarioId" class="input-select">
+            <option v-for="scenario in sampleScenarios" :key="scenario.id" :value="scenario.id">
+              {{ scenario.label }}
+            </option>
+          </select>
+          
+          <button 
+            v-if="activeTab !== 'intro'"
+            class="btn btn-sm" 
+            @click="goToPreviousStep" 
+            :disabled="activeStepIndex <= 0"
           >
-            {{ issue }}
-          </li>
-        </ul>
+            ← Prev
+          </button>
+          <button 
+            class="btn btn-primary btn-sm" 
+            @click="goToNextStep"
+            :disabled="activeStepIndex >= tabs.length - 1"
+          >
+            {{ activeStepIndex >= tabs.length - 1 ? 'Finish' : 'Next Module →' }}
+          </button>
+        </div>
+      </header>
 
-        <DynamicQuestionnaireForm
-          :questionnaire="questionnaireParsed.value"
-          @response-updated="updateGeneratedResponse"
-        />
+      <!-- Scrollable Area -->
+      <div class="content-scroll-area">
+        
+        <!-- MODULE 0: INTRO (Dynamic) -->
+        <div v-if="activeTab === 'intro'" class="card" style="max-width: 800px; margin: 0 auto;">
+          <h2>{{ learningModules.intro.title }}</h2>
+          <div v-for="(section, idx) in learningModules.intro.sections" :key="idx" style="margin-bottom: 2rem;">
+             <h3 style="margin-bottom: 0.5rem;">{{ section.title }}</h3>
+             <p style="white-space: pre-line; color: var(--c-text-primary);">{{ section.content }}</p>
+          </div>
 
-        <h4>Generated QuestionnaireResponse (live)</h4>
-        <pre class="output">{{ JSON.stringify(generatedResponse, null, 2) }}</pre>
-
-        <h4>Extraction mapping examples (QuestionnaireResponse → target resources)</h4>
-        <div class="mapping-grid">
-          <div v-for="mapping in extractionPreview" :key="mapping.name" class="mapping-card">
-            <h5>{{ mapping.name }}</h5>
-            <p><strong>FHIRPath:</strong> {{ mapping.fhirPath }}</p>
-            <p><strong>Target:</strong> {{ mapping.target }}</p>
-            <p v-if="mapping.error" class="error">{{ mapping.error }}</p>
-            <p v-else><strong>Current value:</strong> {{ mapping.value ?? 'null' }}</p>
+          <div class="flow-grid" style="display:grid; gap:1rem; grid-template-columns: repeat(2, 1fr); margin-top:3rem;">
+            <div 
+              v-for="(tab, index) in tabs.slice(1)" 
+              :key="tab.id" 
+              class="card"
+              @click="goToStep(tab.id)"
+              style="cursor:pointer; border-color:var(--c-border);"
+            >
+               <p style="font-size:0.75rem; color: #94a3b8; margin:0">Next Up</p>
+               <h4 style="margin:0.25rem 0">{{ tab.label }}</h4>
+               <p style="font-size:0.9rem; margin:0">{{ tab.goal }}</p>
+            </div>
+          </div>
+          
+          <div style="margin-top: 2rem; text-align: center;">
+             <button class="btn btn-primary" style="padding: 0.75rem 2rem; font-size: 1rem;" @click="goToNextStep">
+                Start Module 1 →
+             </button>
           </div>
         </div>
 
-        <h4>Extracted output bundle (example)</h4>
-        <pre class="output">{{ JSON.stringify(extractedBundle, null, 2) }}</pre>
-      </template>
-    </section>
+        <!-- MODULE 1: TREE -->
+        <div v-if="activeTab === 'tree'" class="split-pane">
+          <!-- Left: Editor & Controls -->
+          <div class="pane">
+            <div class="pane-header">
+               <span>Resource JSON</span>
+               <select v-model="selectedResourceType" class="input-select" style="padding: 0.2rem 2rem 0.2rem 0.5rem; min-width: 140px;">
+                  <option value="Questionnaire">Questionnaire</option>
+                  <option value="QuestionnaireResponse">Response</option>
+               </select>
+            </div>
+            <!-- LEARNING TIP -->
+            <div style="background: #eff6ff; padding: 0.75rem; border-bottom: 1px solid #dbeafe; font-size: 0.9rem; color: #1e40af;">
+                <strong>Tip:</strong> {{ learningModules.structure.sections[0].content }}
+            </div>
+            <div class="pane-body">
+              <JsonTooltipEditor
+                :model-value="selectedResourceType === 'Questionnaire' ? questionnaireJson : responseJson"
+                :resource-type="selectedResourceType"
+                @update:model-value="updateSelectedResourceJson"
+                style="height: 100%; border: none;"
+              />
+            </div>
+          </div>
+          
+          <!-- Right: Visual Tree -->
+          <div class="pane">
+            <div class="pane-header">
+               <span>Interactive Tree</span>
+               <div class="btn-row" style="gap: 0.5rem">
+                  <button class="btn btn-sm" @click="expandAllTreeNodes">Expand</button>
+                  <button class="btn btn-sm" @click="collapseAllTreeNodes">Collapse</button>
+               </div>
+            </div>
+            <div class="pane-body tree-shell">
+              <ul v-if="!selectedParsed.error">
+                <ResourceTreeNode
+                  node-key="root"
+                  :node-value="activeTreeData"
+                  :resource-type="selectedTreeResourceType"
+                  :selected-path="selectedTreeNode?.path || ''"
+                  :tree-control-mode="treeControlMode"
+                  :tree-control-token="treeControlToken"
+                  @select-node="onTreeNodeSelected"
+                />
+              </ul>
+            </div>
+            
+            <div v-if="selectedTreeNode" class="selected-node" style="padding: 1rem; border-top: 1px solid var(--c-border); background: #fdfdfd;">
+               <h5 style="margin: 0 0 0.5rem 0; font-size: 0.9rem;">Selected: {{ selectedTreeNode.path }}</h5>
+               <p class="hint-text" style="margin-bottom: 0.5rem;">{{ selectedTreeNode.tooltip || 'No tooltip available.' }}</p>
+               <div class="btn-row">
+                  <button class="btn btn-primary btn-sm" @click="useNodePathAsExpression">Query Path →</button>
+               </div>
+            </div>
+          </div>
+        </div>
 
-    <section v-if="activeTab === 'authoring'" class="card panel">
-      <h3>Step 4 — Authoring and Reference</h3>
-      <p class="hint">
-        Choose one reference section at a time. This keeps learning focused and avoids information overload.
-      </p>
+        <!-- MODULE 2: FORM -->
+        <div v-if="activeTab === 'form'" class="split-pane">
+           <div class="pane">
+              <div class="pane-header">Questionnaire Source</div>
+              <!-- LEARNING TIP -->
+              <div style="background: #eff6ff; padding: 0.75rem; border-bottom: 1px solid #dbeafe; font-size: 0.9rem; color: #1e40af;">
+                  <strong>Rendering:</strong> {{ learningModules.rendering.sections[0].content }}
+              </div>
+              <div class="pane-body">
+                <JsonTooltipEditor
+                  v-model="questionnaireJson"
+                  resource-type="Questionnaire"
+                  style="height: 100%; border: none;"
+                />
+              </div>
+           </div>
 
-      <div class="tabs sub-tabs">
-        <button
-          v-for="section in authoringSections"
-          :key="section.id"
-          type="button"
-          class="tab-btn"
-          :class="{ active: authoringSection === section.id }"
-          @click="authoringSection = section.id"
-        >
-          {{ section.label }}
-        </button>
+           <div class="pane" style="background: #f8fafc;">
+              <div class="pane-header">
+                 <span>Live Preview</span>
+                 <span class="hint-text" style="font-size: 0.75rem;">Material UI theme</span>
+              </div>
+              <div class="pane-body" style="padding: 1.5rem;">
+                 <DynamicQuestionnaireForm
+                    :questionnaire="questionnaireParsed.value"
+                    @response-updated="updateGeneratedResponse"
+                 />
+                 
+                 <div style="margin-top: 2rem; padding-top: 1rem; border-top: 1px solid var(--c-border);">
+                    <h5 style="margin: 0 0 0.5rem 0;">Live Response JSON</h5>
+                    <pre class="code-output" style="max-height: 200px; overflow: auto;">{{ JSON.stringify(generatedResponse, null, 2) }}</pre>
+                 </div>
+              </div>
+           </div>
+        </div>
+
+        <!-- MODULE 3: FHIRPATH -->
+        <div v-if="activeTab === 'fhirpath'" class="split-pane">
+           <!-- Left -->
+           <div class="flex-col gap-2" style="height: 100%;">
+              <div class="pane" style="flex: 0 0 auto;">
+                 <div class="pane-header">Target</div>
+                 <div style="padding: 1rem;">
+                    <select id="fhirpath-target" v-model="selectedFhirPathResource" class="input-select w-full">
+                      <option value="Questionnaire">Questionnaire (Source)</option>
+                      <option value="QuestionnaireResponse">Sample Response</option>
+                      <option value="GeneratedResponse">Generated Form Response</option>
+                    </select>
+                 </div>
+              </div>
+
+              <div class="pane" style="flex: 1;">
+                 <div class="pane-header">Expression</div>
+                 <!-- LEARNING TIP -->
+                <div style="background: #eff6ff; padding: 0.75rem; border-bottom: 1px solid #dbeafe; font-size: 0.9rem; color: #1e40af;">
+                    <strong>Logic:</strong> {{ learningModules.logic.sections[0].content }}
+                </div>
+                 <div class="pane-body">
+                    <textarea 
+                       v-model="fhirPathExpression" 
+                       class="editor" 
+                       style="width: 100%; height: 100%; border: none; padding: 1rem; font-family: monospace; resize: none; outline: none;" 
+                       placeholder="e.g. item.where(linkId='q1').answer.valueString"
+                    />
+                 </div>
+              </div>
+           </div>
+
+           <!-- Right -->
+           <div class="flex-col gap-2" style="height: 100%;">
+              <div class="pane" style="flex: 1;">
+                 <div class="pane-header">Result</div>
+                 <div class="pane-body" style="padding: 0;">
+                    <div v-if="fhirPathError" class="error-text">{{ fhirPathError }}</div>
+                    <pre v-else class="code-output" style="height: 100%; margin: 0; border-radius: 0;">{{ fhirPathResult || '// Result will appear here' }}</pre>
+                 </div>
+              </div>
+              
+              <div class="pane" style="flex: 0 0 auto;">
+                 <div class="pane-header">Examples</div>
+                 <div class="example-grid">
+                    <button
+                      v-for="example in activeFhirPathExamples"
+                      :key="example.label"
+                      type="button"
+                      class="btn btn-sm"
+                      @click="applyExample(example.expression)"
+                    >
+                      {{ example.label }}
+                    </button>
+                 </div>
+              </div>
+           </div>
+        </div>
+        
+        <!-- MODULE 4: QUIZ (Interactive) -->
+        <div v-if="activeTab === 'quiz'" class="card" style="max-width: 800px; margin: 0 auto;">
+           <h2>Module 4: Knowledge Check</h2>
+           <p class="hint-text" style="margin-bottom: 2rem;">Test your mastery of SDC concepts.</p>
+           
+           <div v-if="!quizSubmitted">
+              <div v-for="(q, idx) in quizQuestions" :key="idx" style="margin-bottom: 2rem; padding-bottom: 1rem; border-bottom: 1px solid var(--c-border);">
+                 <p style="font-weight: 600; margin-bottom: 1rem;">{{ idx + 1 }}. {{ q.question }}</p>
+                 <div style="display: grid; gap: 0.5rem;">
+                    <label v-for="(opt, optIdx) in q.options" :key="optIdx" style="display: flex; gap: 0.5rem; align-items: flex-start; cursor: pointer;">
+                       <input type="radio" :name="'q' + idx" :value="optIdx" v-model="quizAnswers[idx]" style="margin-top: 4px;">
+                       <span>{{ opt }}</span>
+                    </label>
+                 </div>
+              </div>
+              
+              <button class="btn btn-primary" @click="submitQuiz">Submit Quiz</button>
+           </div>
+           
+           <div v-else style="text-align: center; padding: 2rem;">
+              <h3 style="margin-bottom: 1rem;">Results</h3>
+              <div style="font-size: 3rem; font-weight: bold; color: var(--c-accent);">{{ quizPercentage }}%</div>
+              <p style="margin-bottom: 2rem;">You scored {{ quizScore }} out of {{ quizQuestions.length }}.</p>
+              
+              <button class="btn btn-sm" @click="resetQuiz">Try Again</button>
+           </div>
+        </div>
+        
+        <!-- MODULE 5: REFERENCE -->
+        <div v-if="activeTab === 'authoring'" class="card">
+            <div class="tabs" style="border-bottom: 1px solid var(--c-border); padding-bottom: 1rem; margin-bottom: 1rem;">
+                <button
+                  v-for="section in authoringSections"
+                  :key="section.id"
+                  type="button"
+                  class="tab-btn"
+                  :class="{ active: authoringSection === section.id }"
+                  @click="authoringSection = section.id"
+                  style="border: none; background: none; font-weight: 600; cursor: pointer; padding: 0.5rem 1rem;"
+                >
+                  <span :style="{ color: authoringSection === section.id ? 'var(--c-accent)' : 'var(--c-text-secondary)' }">
+                     {{ section.label }}
+                  </span>
+                  <div v-if="authoringSection === section.id" style="height: 2px; background: var(--c-accent); margin-top: 4px;"></div>
+                </button>
+            </div>
+            
+            <template v-if="authoringSection === 'basics'">
+               <h4>How to Write Questionnaire JSON (R4)</h4>
+               <ol class="steps" style="line-height: 1.8; color: var(--c-text-primary);">
+                 <li>Start with required metadata: <strong>resourceType</strong>, <strong>status</strong>, <strong>item</strong>.</li>
+               </ol>
+            </template>
+            
+            <template v-if="authoringSection === 'prepopulation'">
+               <div class="reference-grid">
+                  <article v-for="example in prepopulationExamples" :key="example.title" class="reference-card">
+                     <h5>{{ example.title }}</h5>
+                     <pre class="code-output" style="font-size: 0.75rem;">{{ example.snippet }}</pre>
+                  </article>
+               </div>
+            </template>
+
+            <template v-if="authoringSection === 'fhirpath'">
+               <div style="margin-bottom: 1rem;">
+                  <input v-model="cheatSheetQuery" class="input-select w-full" placeholder="Search..." style="max-width: 400px;">
+               </div>
+               <div class="reference-grid compact">
+                  <article v-for="op in filteredFhirPathOperators" :key="op.symbol" class="reference-card">
+                     <h5>{{ op.symbol }}</h5>
+                     <p class="hint-text">{{ op.meaning }}</p>
+                  </article>
+               </div>
+            </template>
+            
+            <template v-if="authoringSection === 'sdc-context'">
+                <div class="reference-grid">
+                  <article v-for="entry in sdcExpressionContextCheatSheet" :key="entry.area" class="reference-card">
+                     <h5>{{ entry.area }}</h5>
+                    <p class="hint-text">{{ entry.notes }}</p>
+                  </article>
+                </div>
+            </template>
+        </div>
+
       </div>
-
-      <template v-if="authoringSection === 'basics'">
-        <h4>How to Write Questionnaire JSON (R4)</h4>
-
-        <ol class="steps">
-          <li>Start with required metadata: <strong>resourceType</strong>, <strong>status</strong>, <strong>item</strong>.</li>
-          <li>Use stable, unique <strong>linkId</strong> values for each item.</li>
-          <li>Choose accurate <strong>type</strong> values (group, string, integer, date, choice, boolean, text).</li>
-          <li>Use <strong>required</strong> when a question must be answered.</li>
-          <li>
-            For choice questions, add <strong>answerOption</strong> with <strong>valueCoding</strong> code/display.
-          </li>
-          <li>For form logic, add extensions (e.g. <strong>enableWhen</strong>) and test with FHIRPath.</li>
-        </ol>
-
-        <h4>Starter template</h4>
-        <pre class="output">{{ `{
-  "resourceType": "Questionnaire",
-  "status": "active",
-  "item": [
-    {
-      "linkId": "q1",
-      "text": "What is your question?",
-      "type": "string",
-      "required": true
-    }
-  ]
-}` }}</pre>
-
-        <h4>Suggested learning sequence</h4>
-        <ul class="issue-list">
-          <li>1. Explore structure in Step 1.</li>
-          <li>2. Edit and render form in Step 2.</li>
-          <li>3. Validate rules/logic in Step 3.</li>
-          <li>4. Return here for authoring patterns and references.</li>
-        </ul>
-      </template>
-
-      <template v-if="authoringSection === 'prepopulation'">
-        <h4>Prepopulation examples</h4>
-        <div class="reference-grid">
-          <article
-            v-for="example in prepopulationExamples"
-            :key="example.title"
-            class="reference-card"
-          >
-            <h5>{{ example.title }}</h5>
-            <p>{{ example.description }}</p>
-            <pre class="output">{{ example.snippet }}</pre>
-          </article>
-        </div>
-      </template>
-
-      <template v-if="authoringSection === 'fhirpath'">
-        <h4>FHIRPath operators, functions, grammar, and syntax</h4>
-        <div class="row">
-          <label class="label" for="fhirpath-cheatsheet-search">Search</label>
-          <input
-            id="fhirpath-cheatsheet-search"
-            v-model="cheatSheetQuery"
-            class="input"
-            placeholder="Search operators/functions, e.g. where, count, =, contains"
-          />
-        </div>
-
-        <h4>Operators (R4 commonly used)</h4>
-        <div class="reference-grid compact">
-          <article
-            v-for="operator in filteredFhirPathOperators"
-            :key="operator.symbol"
-            class="reference-card"
-          >
-            <h5>{{ operator.symbol }}</h5>
-            <p>{{ operator.meaning }}</p>
-          </article>
-        </div>
-
-        <h4>Functions (R4 commonly used)</h4>
-        <div class="reference-grid">
-          <article
-            v-for="group in filteredFhirPathFunctionGroups"
-            :key="group.category"
-            class="reference-card"
-          >
-            <h5>{{ group.category }}</h5>
-            <p>{{ group.functions.join(', ') }}</p>
-          </article>
-        </div>
-
-        <h4>Grammar cheat-sheet</h4>
-        <div class="reference-grid">
-          <article
-            v-for="grammar in fhirPathGrammarCheatSheet"
-            :key="grammar.title"
-            class="reference-card"
-          >
-            <h5>{{ grammar.title }}</h5>
-            <p><strong>Pattern:</strong> {{ grammar.pattern }}</p>
-            <p>{{ grammar.description }}</p>
-            <p><strong>Example:</strong> {{ grammar.example }}</p>
-          </article>
-        </div>
-
-        <h4>Syntax quick rules</h4>
-        <ul class="issue-list">
-          <li v-for="rule in fhirPathSyntaxRules" :key="rule">{{ rule }}</li>
-        </ul>
-
-        <p
-          v-if="!filteredFhirPathOperators.length && !filteredFhirPathFunctionGroups.length"
-          class="hint"
-        >
-          No matches for “{{ cheatSheetQuery }}”.
-        </p>
-      </template>
-
-      <template v-if="authoringSection === 'sdc-context'">
-        <h4>SDC IG expression context cheat-sheet</h4>
-        <div class="reference-grid">
-          <article
-            v-for="entry in sdcExpressionContextCheatSheet"
-            :key="entry.area"
-            class="reference-card"
-          >
-            <h5>{{ entry.area }}</h5>
-            <p><strong>Context:</strong> {{ entry.context }}</p>
-            <p><strong>Notes:</strong> {{ entry.notes }}</p>
-            <p><strong>Example:</strong> {{ entry.example }}</p>
-          </article>
-        </div>
-      </template>
-
-      <p class="hint">
-        Note: exact runtime support depends on the evaluator implementation used by your app/server.
-      </p>
-    </section>
-  </main>
+    </main>
+  </div>
 </template>

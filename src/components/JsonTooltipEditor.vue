@@ -30,11 +30,12 @@ const jsonKeyRegex = /"([^"\\]*(?:\\.[^"\\]*)*)"\s*:/g
 
 const editorTheme = EditorView.theme({
   '&': {
-    maxHeight: '520px',
-    border: '1px solid var(--color-border)',
-    borderRadius: '10px',
-    backgroundColor: 'var(--color-background)',
-    fontSize: '0.9rem',
+    height: '100%',
+    maxHeight: 'none',
+    border: 'none',
+    borderRadius: '0',
+    backgroundColor: 'var(--c-bg-pane)',
+    fontSize: '0.85rem',
   },
   '.cm-scroller': {
     overflow: 'auto',
