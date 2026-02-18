@@ -1,6 +1,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 import fhirpath from 'fhirpath'
+import r4Model from 'fhirpath/fhir-context/r4'
 import DynamicQuestionnaireForm from '@/components/DynamicQuestionnaireForm.vue'
 import JsonTooltipEditor from '@/components/JsonTooltipEditor.vue'
 import ResourceTreeNode from '@/components/ResourceTreeNode.vue'
@@ -438,6 +439,217 @@ function pgRunFhirPath() {
 
 watch(pgFhirPathExpr, () => { pgRunFhirPath() })
 watch(pgGeneratedResponse, () => { pgRunFhirPath() })
+
+// ── Playground Mode ──
+const pgMode = ref('form') // 'form' | 'fhirpath'
+
+// ── FHIRPath Explorer State ──
+const fpSampleResources = {
+  Patient: {
+    resourceType: 'Patient', id: 'example',
+    name: [{ use: 'official', family: 'Chalmers', given: ['Peter', 'James'] }, { use: 'usual', given: ['Jim'] }],
+    telecom: [{ system: 'phone', value: '(03) 5555 6473', use: 'work', rank: 1 }, { system: 'phone', value: '(03) 3410 5613', use: 'mobile', rank: 2 }],
+    gender: 'male', birthDate: '1974-12-25', active: true,
+    address: [{ use: 'home', type: 'both', text: '534 Erewhon St PeasantVille, Rainbow, Vic  3999', line: ['534 Erewhon St'], city: 'PleasantVille', district: 'Rainbow', state: 'Vic', postalCode: '3999', period: { start: '1974-12-25' } }],
+    managingOrganization: { reference: 'Organization/1' },
+  },
+  Observation: {
+    resourceType: 'Observation', id: 'blood-pressure', status: 'final',
+    category: [{ coding: [{ system: 'http://terminology.hl7.org/CodeSystem/observation-category', code: 'vital-signs', display: 'Vital Signs' }] }],
+    code: { coding: [{ system: 'http://loinc.org', code: '85354-9', display: 'Blood pressure panel' }] },
+    subject: { reference: 'Patient/example' }, effectiveDateTime: '2024-09-17',
+    component: [
+      { code: { coding: [{ system: 'http://loinc.org', code: '8480-6', display: 'Systolic blood pressure' }] }, valueQuantity: { value: 120, unit: 'mmHg', system: 'http://unitsofmeasure.org', code: 'mm[Hg]' } },
+      { code: { coding: [{ system: 'http://loinc.org', code: '8462-4', display: 'Diastolic blood pressure' }] }, valueQuantity: { value: 80, unit: 'mmHg', system: 'http://unitsofmeasure.org', code: 'mm[Hg]' } },
+    ],
+  },
+  Questionnaire: {
+    resourceType: 'Questionnaire', id: 'example', status: 'active', title: 'Example Questionnaire', url: 'http://example.org/fhir/Questionnaire/example',
+    item: [
+      { linkId: 'name', text: 'What is your name?', type: 'string', required: true },
+      { linkId: 'dob', text: 'Date of birth', type: 'date' },
+      { linkId: 'allergy', text: 'Do you have allergies?', type: 'boolean' },
+      { linkId: 'allergy-detail', text: 'Describe your allergies', type: 'text', enableWhen: [{ question: 'allergy', operator: '=', answerBoolean: true }] },
+    ],
+  },
+  QuestionnaireResponse: {
+    resourceType: 'QuestionnaireResponse', id: 'example-response', status: 'completed',
+    questionnaire: 'http://example.org/fhir/Questionnaire/example', authored: '2024-09-17T14:00:00Z',
+    item: [
+      { linkId: 'name', answer: [{ valueString: 'Jane Doe' }] },
+      { linkId: 'dob', answer: [{ valueDate: '1990-03-15' }] },
+      { linkId: 'allergy', answer: [{ valueBoolean: true }] },
+      { linkId: 'allergy-detail', answer: [{ valueString: 'Peanuts, shellfish' }] },
+    ],
+  },
+  Bundle: {
+    resourceType: 'Bundle', id: 'example-bundle', type: 'searchset', total: 2,
+    entry: [
+      { fullUrl: 'http://example.org/fhir/Patient/1', resource: { resourceType: 'Patient', id: '1', name: [{ family: 'Smith', given: ['John'] }], gender: 'male', birthDate: '1985-01-15' } },
+      { fullUrl: 'http://example.org/fhir/Patient/2', resource: { resourceType: 'Patient', id: '2', name: [{ family: 'Doe', given: ['Jane'] }], gender: 'female', birthDate: '1990-03-20' } },
+    ],
+  },
+  Condition: {
+    resourceType: 'Condition', id: 'example',
+    clinicalStatus: { coding: [{ system: 'http://terminology.hl7.org/CodeSystem/condition-clinical', code: 'active' }] },
+    verificationStatus: { coding: [{ system: 'http://terminology.hl7.org/CodeSystem/condition-ver-status', code: 'confirmed' }] },
+    category: [{ coding: [{ system: 'http://terminology.hl7.org/CodeSystem/condition-category', code: 'encounter-diagnosis', display: 'Encounter Diagnosis' }] }],
+    code: { coding: [{ system: 'http://snomed.info/sct', code: '386661006', display: 'Fever' }], text: 'Fever' },
+    subject: { reference: 'Patient/example' }, onsetDateTime: '2024-09-10', recordedDate: '2024-09-12',
+  },
+}
+
+const fpQuickExamples = {
+  Patient: [
+    { label: 'Official name', expr: "name.where(use='official').given" },
+    { label: 'Family name', expr: 'name.first().family' },
+    { label: 'Is active?', expr: 'active' },
+    { label: 'Birth year', expr: 'birthDate.substring(0,4)' },
+    { label: 'Phone numbers', expr: "telecom.where(system='phone').value" },
+    { label: 'Home address city', expr: "address.where(use='home').city" },
+    { label: 'Has multiple names?', expr: 'name.count() > 1' },
+    { label: 'All given names', expr: 'name.given' },
+  ],
+  Observation: [
+    { label: 'Status', expr: 'status' },
+    { label: 'LOINC code', expr: 'code.coding.code' },
+    { label: 'Systolic value', expr: "component.where(code.coding.code='8480-6').valueQuantity.value" },
+    { label: 'Diastolic value', expr: "component.where(code.coding.code='8462-4').valueQuantity.value" },
+    { label: 'All component values', expr: 'component.valueQuantity.value' },
+    { label: 'Category display', expr: 'category.coding.display' },
+  ],
+  Questionnaire: [
+    { label: 'All linkIds', expr: 'item.linkId' },
+    { label: 'Required items', expr: 'item.where(required=true).text' },
+    { label: 'Item types', expr: 'item.type' },
+    { label: 'Count items', expr: 'item.count()' },
+    { label: 'Has enableWhen?', expr: 'item.where(enableWhen.exists()).text' },
+  ],
+  QuestionnaireResponse: [
+    { label: 'All answers', expr: 'item.answer' },
+    { label: 'Name answer', expr: "item.where(linkId='name').answer.valueString" },
+    { label: 'DOB answer', expr: "item.where(linkId='dob').answer.valueDate" },
+    { label: 'Answered items', expr: 'item.where(answer.exists()).linkId' },
+    { label: 'Answer count', expr: 'item.answer.count()' },
+  ],
+  Bundle: [
+    { label: 'Total', expr: 'total' },
+    { label: 'All resource types', expr: 'entry.resource.resourceType' },
+    { label: 'All patient names', expr: 'entry.resource.name.family' },
+    { label: 'First entry ID', expr: 'entry.first().resource.id' },
+    { label: 'Entry count', expr: 'entry.count()' },
+  ],
+  Condition: [
+    { label: 'Clinical status', expr: 'clinicalStatus.coding.code' },
+    { label: 'SNOMED code', expr: 'code.coding.code' },
+    { label: 'Display text', expr: 'code.text' },
+    { label: 'Onset date', expr: 'onsetDateTime' },
+    { label: 'Is confirmed?', expr: "verificationStatus.coding.code = 'confirmed'" },
+  ],
+}
+
+const fpSelectedResource = ref('Patient')
+const fpResourceJson = ref(JSON.stringify(fpSampleResources.Patient, null, 2))
+const fpExpression = ref("name.where(use='official').given")
+const fpResult = ref('')
+const fpResultError = ref('')
+const fpResultType = ref('')
+const fpEvalTimeMs = ref(0)
+const fpVariables = ref([])
+const fpShowVars = ref(false)
+const fpHistory = ref([])
+const fpShowHistory = ref(false)
+
+const fpParsedResource = computed(() => {
+  try { return { value: JSON.parse(fpResourceJson.value), error: null } }
+  catch (e) { return { value: null, error: e.message } }
+})
+const fpCurrentExamples = computed(() => fpQuickExamples[fpSelectedResource.value] || [])
+const fpJsonLineCount = computed(() => fpResourceJson.value.split('\n').length)
+
+function fpLoadSampleResource(type) {
+  fpSelectedResource.value = type
+  const sample = fpSampleResources[type]
+  if (sample) fpResourceJson.value = JSON.stringify(sample, null, 2)
+  const examples = fpQuickExamples[type]
+  if (examples?.length) fpExpression.value = examples[0].expr
+  fpResult.value = ''
+  fpResultError.value = ''
+  fpResultType.value = ''
+}
+
+function fpEvaluate() {
+  fpResultError.value = ''
+  fpResult.value = ''
+  fpResultType.value = ''
+  fpEvalTimeMs.value = 0
+  if (!fpExpression.value.trim()) return
+  if (fpParsedResource.value.error) {
+    fpResultError.value = 'Cannot evaluate — the resource JSON is invalid.'
+    fpResultType.value = 'error'
+    return
+  }
+  const env = {}
+  for (const v of fpVariables.value) {
+    if (v.name && v.value.trim()) {
+      try { env[v.name] = JSON.parse(v.value) } catch { env[v.name] = v.value }
+    }
+  }
+  const start = performance.now()
+  try {
+    const letPattern = /^let\s+(\w+)\s*:=\s*(.+?);\s*/
+    let remaining = fpExpression.value.trim()
+    const varNames = []
+    while (letPattern.test(remaining)) {
+      const match = remaining.match(letPattern)
+      const varResult = fhirpath.evaluate(fpParsedResource.value.value, match[2], env, r4Model)
+      env[match[1]] = varResult.length === 1 ? varResult[0] : varResult
+      varNames.push(match[1])
+      remaining = remaining.substring(match[0].length)
+    }
+    const sortedNames = [...varNames].sort((a, b) => b.length - a.length)
+    for (const name of sortedNames) {
+      remaining = remaining.replace(new RegExp(`(?<!%)\\b${name}\\b`, 'g'), `%${name}`)
+    }
+    const res = fhirpath.evaluate(fpParsedResource.value.value, remaining, env, r4Model)
+    fpEvalTimeMs.value = Math.round((performance.now() - start) * 100) / 100
+    if (res.length === 0) {
+      fpResult.value = '[]  (empty result)'
+      fpResultType.value = 'empty'
+    } else {
+      fpResult.value = JSON.stringify(res, null, 2)
+      fpResultType.value = 'success'
+    }
+    // History
+    const existing = fpHistory.value.findIndex((h) => h.expression === fpExpression.value)
+    if (existing !== -1) fpHistory.value.splice(existing, 1)
+    fpHistory.value.unshift({ expression: fpExpression.value, resultCount: res.length, timestamp: new Date().toLocaleTimeString() })
+    if (fpHistory.value.length > 30) fpHistory.value.pop()
+  } catch (e) {
+    fpEvalTimeMs.value = Math.round((performance.now() - start) * 100) / 100
+    fpResultError.value = e.message || 'Evaluation failed.'
+    fpResultType.value = 'error'
+  }
+}
+
+function fpApplyExample(expr) { fpExpression.value = expr; fpEvaluate() }
+function fpApplyFromHistory(entry) { fpExpression.value = entry.expression; fpShowHistory.value = false; fpEvaluate() }
+function fpAddVariable() { fpVariables.value.push({ name: '', value: '' }) }
+function fpRemoveVariable(idx) { fpVariables.value.splice(idx, 1) }
+function fpFormatJson() { try { fpResourceJson.value = JSON.stringify(JSON.parse(fpResourceJson.value), null, 2) } catch {} }
+function fpHandleLoadFile(event) {
+  const file = event.target.files?.[0]
+  if (!file) return
+  const reader = new FileReader()
+  reader.onload = (e) => {
+    try { const json = JSON.parse(e.target.result); fpResourceJson.value = JSON.stringify(json, null, 2); if (json.resourceType && fpSampleResources[json.resourceType]) fpSelectedResource.value = json.resourceType } catch { fpResourceJson.value = e.target.result }
+  }
+  reader.readAsText(file)
+}
+
+let fpEvalTimer = null
+watch(fpExpression, () => { clearTimeout(fpEvalTimer); fpEvalTimer = setTimeout(() => fpEvaluate(), 400) })
+watch(fpResourceJson, () => { clearTimeout(fpEvalTimer); fpEvalTimer = setTimeout(() => fpEvaluate(), 600) })
 
 const generatedResponse = ref(sampleQuestionnaireResponse)
 
@@ -1205,10 +1417,6 @@ function buildExtractionBundle(response) {
       </nav>
 
       <div class="sidebar-footer">
-        <router-link to="/fhirpath-lab" class="fplab-sidebar-link">
-          🧪 FHIRPath Lab
-          <span style="font-size: 0.65rem; background: rgba(99,102,241,0.2); padding: 0.1rem 0.4rem; border-radius: 4px;">NEW</span>
-        </router-link>
         <div class="flex-col gap-2">
             <div style="display:flex; justify-content:space-between;">
                 <span style="font-size:0.8rem">Progress</span>
@@ -1681,23 +1889,46 @@ function buildExtractionBundle(response) {
 
         <!-- PLAYGROUND -->
         <div v-if="activeTab === 'playground'" class="playground-shell">
-          <!-- Top toolbar -->
-          <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap;">
-            <label style="font-weight: 600; font-size: 0.85rem; color: var(--c-text-secondary);">Starter Template:</label>
-            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-              <button
-                v-for="tpl in playgroundTemplates"
-                :key="tpl.id"
-                class="btn btn-sm"
-                :class="{ 'btn-primary': pgSelectedTemplate === tpl.id }"
-                @click="pgLoadTemplate(tpl.id)"
-              >
-                {{ tpl.label }}
+          <!-- Mode Switcher -->
+          <div class="pg-mode-bar">
+            <div class="pg-mode-tabs">
+              <button class="pg-mode-tab" :class="{ active: pgMode === 'form' }" @click="pgMode = 'form'">📝 Form Builder</button>
+              <button class="pg-mode-tab" :class="{ active: pgMode === 'fhirpath' }" @click="pgMode = 'fhirpath'; fpEvaluate()">🔬 FHIRPath Explorer</button>
+            </div>
+            <!-- Form mode toolbar -->
+            <div v-if="pgMode === 'form'" style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+              <label style="font-weight: 600; font-size: 0.8rem; color: var(--c-text-secondary);">Template:</label>
+              <select class="input-select" style="font-size: 0.8rem;" :value="pgSelectedTemplate" @change="pgLoadTemplate($event.target.value)">
+                <option v-for="tpl in playgroundTemplates" :key="tpl.id" :value="tpl.id">{{ tpl.label }}</option>
+              </select>
+            </div>
+            <!-- FHIRPath mode toolbar -->
+            <div v-if="pgMode === 'fhirpath'" style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+              <select class="input-select" style="font-size: 0.8rem;" :value="fpSelectedResource" @change="fpLoadSampleResource($event.target.value)">
+                <option v-for="key in Object.keys(fpSampleResources)" :key="key" :value="key">{{ key }}</option>
+              </select>
+              <label class="btn btn-sm" style="cursor: pointer;">📂 Load file<input type="file" accept=".json" hidden @change="fpHandleLoadFile" /></label>
+              <button class="btn btn-sm" @click="fpFormatJson">Format</button>
+              <button class="btn btn-sm" @click="fpShowHistory = !fpShowHistory">🕐 History <span v-if="fpHistory.length" style="font-size: 0.7rem; background: var(--c-accent); color: #fff; padding: 0 0.35rem; border-radius: 999px; margin-left: 0.2rem;">{{ fpHistory.length }}</span></button>
+            </div>
+          </div>
+
+          <!-- FHIRPath History Dropdown -->
+          <div v-if="pgMode === 'fhirpath' && fpShowHistory && fpHistory.length" class="fp-history-panel">
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.4rem 0.75rem; border-bottom: 1px solid var(--c-border); font-size: 0.78rem; font-weight: 600;">
+              <span>Expression History</span>
+              <button class="btn btn-sm" style="font-size: 0.7rem;" @click="fpHistory = []; fpShowHistory = false;">Clear</button>
+            </div>
+            <div style="max-height: 200px; overflow: auto;">
+              <button v-for="(entry, idx) in fpHistory" :key="idx" class="fp-history-item" @click="fpApplyFromHistory(entry)">
+                <code>{{ entry.expression }}</code>
+                <span style="color: var(--c-text-tertiary); font-size: 0.7rem; white-space: nowrap;">{{ entry.resultCount }} result{{ entry.resultCount !== 1 ? 's' : '' }} · {{ entry.timestamp }}</span>
               </button>
             </div>
           </div>
 
-          <div class="split-pane" style="height: calc(100vh - var(--header-height) - 7rem);">
+          <!-- ═══ FORM BUILDER MODE ═══ -->
+          <div v-if="pgMode === 'form'" class="split-pane" style="height: calc(100vh - var(--header-height) - 7rem);">
             <!-- Left: JSON Editor -->
             <div class="pane">
               <div class="pane-header">
@@ -1785,6 +2016,111 @@ function buildExtractionBundle(response) {
                   <li>Use <strong>readOnly: true</strong> on calculated items.</li>
                   <li>Add the <strong>constraint</strong> extension for custom validation with a <strong>human</strong> error message.</li>
                 </ul>
+              </div>
+            </div>
+          </div>
+
+          <!-- ═══ FHIRPATH EXPLORER MODE ═══ -->
+          <div v-if="pgMode === 'fhirpath'" style="display: flex; flex-direction: column; flex: 1; min-height: 0;">
+            <!-- Expression Bar -->
+            <div style="padding: 0.75rem 0; border-bottom: 1px solid var(--c-border); margin-bottom: 0.75rem;">
+              <label style="font-size: 0.75rem; font-weight: 600; color: var(--c-text-secondary); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.3rem; display: block;">FHIRPath Expression</label>
+              <div style="display: flex; gap: 0.75rem; align-items: flex-start;">
+                <textarea
+                  v-model="fpExpression"
+                  rows="2"
+                  spellcheck="false"
+                  style="flex: 1; font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 0.9rem; padding: 0.55rem 0.75rem; border: 2px solid var(--c-border); border-radius: 8px; background: var(--c-bg-secondary); color: var(--c-text-primary); resize: vertical; outline: none; line-height: 1.5; transition: border-color 0.15s;"
+                  placeholder="e.g. name.where(use='official').given"
+                  @keydown.enter.prevent="fpEvaluate"
+                  @focus="$event.target.style.borderColor = 'var(--c-accent)'"
+                  @blur="$event.target.style.borderColor = 'var(--c-border)'"
+                />
+                <button class="btn btn-primary" style="padding: 0.55rem 1rem; white-space: nowrap;" @click="fpEvaluate">▶ Evaluate</button>
+              </div>
+              <div style="display: flex; gap: 1.5rem; margin-top: 0.3rem; font-size: 0.7rem; color: var(--c-text-tertiary);">
+                <span>Press <kbd style="background: var(--c-bg-secondary); border: 1px solid var(--c-border); border-radius: 3px; padding: 0 0.3rem; font-size: 0.7rem;">Enter</kbd> to evaluate</span>
+                <span>Supports <code style="font-family: monospace; font-size: 0.7rem;">let var := expr;</code> bindings</span>
+                <span v-if="fpEvalTimeMs">{{ fpEvalTimeMs }}ms</span>
+                <span style="margin-left: auto; font-size: 0.7rem; opacity: 0.7;">fhirpath.js v4.8.5 · FHIR R4</span>
+              </div>
+            </div>
+
+            <!-- Two-column: Resource Editor | Result + Vars + Examples -->
+            <div class="split-pane" style="flex: 1; min-height: 0;">
+              <!-- Left: Resource Editor -->
+              <div class="pane" style="min-height: 300px;">
+                <div class="pane-header">
+                  <span>Context Resource — {{ fpSelectedResource }}</span>
+                </div>
+                <div class="pane-body" style="display: flex; flex-direction: column;">
+                  <div style="display: flex; flex: 1; min-height: 0;">
+                    <div class="fp-line-numbers" aria-hidden="true">
+                      <div v-for="n in fpJsonLineCount" :key="n">{{ n }}</div>
+                    </div>
+                    <textarea
+                      v-model="fpResourceJson"
+                      spellcheck="false"
+                      wrap="off"
+                      class="fp-editor-textarea"
+                    />
+                  </div>
+                  <div style="padding: 0.3rem 0.75rem; font-size: 0.7rem; border-top: 1px solid var(--c-border); background: var(--c-bg-secondary);">
+                    <span v-if="fpParsedResource.error" style="color: #dc2626;">✗ Invalid JSON</span>
+                    <span v-else style="color: #059669;">✓ Valid {{ fpParsedResource.value?.resourceType || 'JSON' }}</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Right: Result + Vars + Examples -->
+              <div style="display: flex; flex-direction: column; gap: 0.75rem; overflow: auto;">
+                <!-- Result -->
+                <div class="pane" style="min-height: 140px;">
+                  <div class="pane-header">
+                    <span>Result</span>
+                    <span v-if="fpResultType === 'success'" style="font-size: 0.7rem; color: var(--c-text-secondary); font-weight: 400;">{{ JSON.parse(fpResult).length }} item{{ JSON.parse(fpResult).length !== 1 ? 's' : '' }}</span>
+                  </div>
+                  <div class="pane-body" style="padding: 0;">
+                    <div v-if="fpResultError" style="padding: 0.75rem; color: #dc2626; font-size: 0.82rem; display: flex; gap: 0.4rem; align-items: flex-start;"><strong>✗</strong> {{ fpResultError }}</div>
+                    <pre v-else-if="fpResultType === 'empty'" class="code-output" style="height: 100%; margin: 0; border-radius: 0; color: var(--c-text-tertiary);">{{ fpResult }}</pre>
+                    <pre v-else-if="fpResult" class="code-output" style="height: 100%; margin: 0; border-radius: 0; color: #059669;">{{ fpResult }}</pre>
+                    <div v-else style="padding: 0.75rem; color: var(--c-text-tertiary); font-style: italic; font-size: 0.82rem;">Result will appear here</div>
+                  </div>
+                </div>
+
+                <!-- Variables -->
+                <div class="pane">
+                  <div class="pane-header">
+                    <span>Environment Variables <button class="btn btn-sm" style="margin-left: 0.4rem; font-size: 0.7rem;" @click="fpShowVars = !fpShowVars">{{ fpShowVars ? '▾ Hide' : '▸ Show' }}</button></span>
+                    <button v-if="fpShowVars" class="btn btn-sm" style="font-size: 0.7rem;" @click="fpAddVariable">+ Add</button>
+                  </div>
+                  <div v-if="fpShowVars" style="padding: 0.5rem 0.75rem;">
+                    <div v-if="!fpVariables.length" style="font-size: 0.8rem; color: var(--c-text-secondary); line-height: 1.6;">No custom variables. Click <strong>+ Add</strong> to create one. Use as <code style="font-family: monospace;">%varName</code>.</div>
+                    <div v-for="(v, idx) in fpVariables" :key="idx" style="display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.35rem;">
+                      <span style="font-family: monospace; color: var(--c-accent); font-weight: 600;">%</span>
+                      <input v-model="v.name" placeholder="varName" spellcheck="false" style="width: 110px; font-family: monospace; font-size: 0.8rem; padding: 0.3rem 0.4rem; border: 1px solid var(--c-border); border-radius: 4px; outline: none;" />
+                      <input v-model="v.value" placeholder="JSON or string" spellcheck="false" style="flex: 1; font-family: monospace; font-size: 0.8rem; padding: 0.3rem 0.4rem; border: 1px solid var(--c-border); border-radius: 4px; outline: none;" />
+                      <button class="btn btn-sm" @click="fpRemoveVariable(idx)" title="Remove">✕</button>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Quick Examples -->
+                <div class="pane">
+                  <div class="pane-header"><span>Quick Examples — {{ fpSelectedResource }}</span></div>
+                  <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0.4rem; padding: 0.6rem 0.75rem;">
+                    <button
+                      v-for="ex in fpCurrentExamples"
+                      :key="ex.label"
+                      class="fp-example-btn"
+                      :class="{ active: fpExpression === ex.expr }"
+                      @click="fpApplyExample(ex.expr)"
+                    >
+                      <span style="font-size: 0.75rem; font-weight: 600;">{{ ex.label }}</span>
+                      <code style="font-family: monospace; font-size: 0.68rem; color: var(--c-accent); word-break: break-all;">{{ ex.expr }}</code>
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
