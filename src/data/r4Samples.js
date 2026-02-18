@@ -871,3 +871,787 @@ export const sdcExpressionContextCheatSheet = [
     example: "%resource.item.where(linkId='demographics').item.where(linkId='dob')",
   },
 ]
+
+// ────────────────────────────────────────────────
+// RENDERING EXTENSIONS CATALOG
+// ────────────────────────────────────────────────
+
+export const renderingExtensionsCatalog = [
+  {
+    name: 'questionnaire-itemControl',
+    url: 'http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl',
+    purpose: 'Specifies the UI widget to render for an item.',
+    appliesTo: 'Any item type',
+    valueType: 'CodeableConcept',
+    codes: ['drop-down', 'radio-button', 'check-box', 'autocomplete', 'slider', 'text-box', 'calendar', 'gtable', 'table', 'htable', 'page', 'tab-container', 'collapsible', 'flyover', 'help'],
+    snippet: `{
+  "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+  "valueCodeableConcept": {
+    "coding": [{
+      "system": "http://hl7.org/fhir/questionnaire-item-control",
+      "code": "radio-button"
+    }]
+  }
+}`,
+  },
+  {
+    name: 'rendering-style',
+    url: 'http://hl7.org/fhir/StructureDefinition/rendering-style',
+    purpose: 'Inline CSS applied to the item text/label.',
+    appliesTo: 'text, prefix, or label elements',
+    valueType: 'string',
+    codes: [],
+    snippet: `{
+  "url": "http://hl7.org/fhir/StructureDefinition/rendering-style",
+  "valueString": "color: #dc2626; font-weight: bold;"
+}`,
+  },
+  {
+    name: 'rendering-xhtml',
+    url: 'http://hl7.org/fhir/StructureDefinition/rendering-xhtml',
+    purpose: 'Rich XHTML content for item text instead of plain text.',
+    appliesTo: 'text elements',
+    valueType: 'string (XHTML)',
+    codes: [],
+    snippet: `{
+  "url": "http://hl7.org/fhir/StructureDefinition/rendering-xhtml",
+  "valueString": "<b>Important:</b> Please read <a href='http://example.org'>these instructions</a>."
+}`,
+  },
+  {
+    name: 'entryFormat',
+    url: 'http://hl7.org/fhir/StructureDefinition/entryFormat',
+    purpose: 'Placeholder text / input mask for empty fields.',
+    appliesTo: 'string, integer, decimal, date items',
+    valueType: 'string',
+    codes: [],
+    snippet: `{
+  "url": "http://hl7.org/fhir/StructureDefinition/entryFormat",
+  "valueString": "DD/MM/YYYY"
+}`,
+  },
+  {
+    name: 'questionnaire-hidden',
+    url: 'http://hl7.org/fhir/StructureDefinition/questionnaire-hidden',
+    purpose: 'Hides an item visually but keeps it in the data model.',
+    appliesTo: 'Any item',
+    valueType: 'boolean',
+    codes: [],
+    snippet: `{
+  "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-hidden",
+  "valueBoolean": true
+}`,
+  },
+  {
+    name: 'questionnaire-choiceOrientation',
+    url: 'http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation',
+    purpose: 'Layout direction for choice items (horizontal/vertical).',
+    appliesTo: 'choice, open-choice items',
+    valueType: 'code',
+    codes: ['horizontal', 'vertical'],
+    snippet: `{
+  "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+  "valueCode": "horizontal"
+}`,
+  },
+  {
+    name: 'questionnaire-sliderStepValue',
+    url: 'http://hl7.org/fhir/StructureDefinition/questionnaire-sliderStepValue',
+    purpose: 'Step increment for slider controls.',
+    appliesTo: 'integer, decimal items with slider itemControl',
+    valueType: 'integer',
+    codes: [],
+    snippet: `{
+  "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-sliderStepValue",
+  "valueInteger": 5
+}`,
+  },
+  {
+    name: 'shortText',
+    url: 'http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-shortText',
+    purpose: 'Abbreviated label for compact screen display.',
+    appliesTo: 'Any item',
+    valueType: 'string',
+    codes: [],
+    snippet: `{
+  "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-shortText",
+  "valueString": "DOB"
+}`,
+  },
+  {
+    name: 'collapsible',
+    url: 'http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-collapsible',
+    purpose: 'Makes a group collapsible (default-open or default-closed).',
+    appliesTo: 'group items',
+    valueType: 'code',
+    codes: ['default-open', 'default-closed'],
+    snippet: `{
+  "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-collapsible",
+  "valueCode": "default-closed"
+}`,
+  },
+  {
+    name: 'displayCategory',
+    url: 'http://hl7.org/fhir/StructureDefinition/questionnaire-displayCategory',
+    purpose: 'Categorizes display items (instructions, security notice).',
+    appliesTo: 'display items',
+    valueType: 'CodeableConcept',
+    codes: ['instructions', 'security'],
+    snippet: `{
+  "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-displayCategory",
+  "valueCodeableConcept": {
+    "coding": [{ "system": "http://hl7.org/fhir/questionnaire-display-category", "code": "instructions" }]
+  }
+}`,
+  },
+]
+
+// ────────────────────────────────────────────────
+// BEHAVIOR EXTENSIONS & DEMOS
+// ────────────────────────────────────────────────
+
+export const behaviorExamples = [
+  {
+    title: 'enableWhen with enableBehavior "any"',
+    description: 'Show referral note if ANY warning sign is positive (OR logic).',
+    snippet: `{
+  "linkId": "referral-note",
+  "text": "Referral note",
+  "type": "text",
+  "enableBehavior": "any",
+  "enableWhen": [
+    { "question": "headache", "operator": "=", "answerBoolean": true },
+    { "question": "blurred-vision", "operator": "=", "answerBoolean": true },
+    { "question": "swelling", "operator": "=", "answerBoolean": true }
+  ]
+}`,
+  },
+  {
+    title: 'enableWhenExpression (FHIRPath)',
+    description: 'Show warning when BMI is in the obese range using a FHIRPath expression.',
+    snippet: `{
+  "linkId": "bmi-warning",
+  "text": "⚠️ BMI indicates obesity. Consider lifestyle counseling.",
+  "type": "display",
+  "extension": [{
+    "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-enableWhenExpression",
+    "valueExpression": {
+      "language": "text/fhirpath",
+      "expression": "%resource.item.where(linkId='bmi').answer.valueDecimal.first() >= 30"
+    }
+  }]
+}`,
+  },
+  {
+    title: 'Value Constraints (minValue / maxValue)',
+    description: 'Restrict a numeric field to a valid range.',
+    snippet: `{
+  "linkId": "heart-rate",
+  "text": "Heart rate (bpm)",
+  "type": "integer",
+  "extension": [
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/minValue",
+      "valueInteger": 30
+    },
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/maxValue",
+      "valueInteger": 250
+    }
+  ]
+}`,
+  },
+  {
+    title: 'Regex Constraint',
+    description: 'Validate that a field matches a phone number pattern.',
+    snippet: `{
+  "linkId": "phone",
+  "text": "Phone number",
+  "type": "string",
+  "extension": [{
+    "url": "http://hl7.org/fhir/StructureDefinition/regex",
+    "valueString": "^[+]?[0-9\\\\s\\\\-()]{7,15}$"
+  }],
+  "maxLength": 20
+}`,
+  },
+  {
+    title: 'itemWeight Scoring (PHQ-2 style)',
+    description: 'Assign numeric weights to answer options for standardized scoring.',
+    snippet: `{
+  "linkId": "interest-pleasure",
+  "text": "Little interest or pleasure in doing things?",
+  "type": "choice",
+  "answerOption": [
+    {
+      "valueCoding": { "code": "not-at-all", "display": "Not at all" },
+      "extension": [{ "url": "http://hl7.org/fhir/StructureDefinition/ordinalValue", "valueDecimal": 0 }]
+    },
+    {
+      "valueCoding": { "code": "several-days", "display": "Several days" },
+      "extension": [{ "url": "http://hl7.org/fhir/StructureDefinition/ordinalValue", "valueDecimal": 1 }]
+    },
+    {
+      "valueCoding": { "code": "more-than-half", "display": "More than half the days" },
+      "extension": [{ "url": "http://hl7.org/fhir/StructureDefinition/ordinalValue", "valueDecimal": 2 }]
+    },
+    {
+      "valueCoding": { "code": "nearly-every-day", "display": "Nearly every day" },
+      "extension": [{ "url": "http://hl7.org/fhir/StructureDefinition/ordinalValue", "valueDecimal": 3 }]
+    }
+  ]
+}`,
+  },
+  {
+    title: 'answerValueSet Reference',
+    description: 'Use a ValueSet for answer options instead of inline answerOption.',
+    snippet: `{
+  "linkId": "condition-code",
+  "text": "Primary condition",
+  "type": "choice",
+  "answerValueSet": "http://hl7.org/fhir/ValueSet/condition-code"
+}`,
+  },
+  {
+    title: 'Variable + CalculatedExpression',
+    description: 'Define a reusable variable and use it in a calculation.',
+    snippet: `{
+  "linkId": "scoring-group",
+  "text": "Scoring",
+  "type": "group",
+  "extension": [{
+    "url": "http://hl7.org/fhir/StructureDefinition/variable",
+    "valueExpression": {
+      "name": "totalScore",
+      "language": "text/fhirpath",
+      "expression": "%resource.item.where(linkId='q1' or linkId='q2').answer.value.aggregate($this + $total, 0)"
+    }
+  }],
+  "item": [{
+    "linkId": "total",
+    "text": "Total Score",
+    "type": "integer",
+    "readOnly": true,
+    "extension": [{
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-calculatedExpression",
+      "valueExpression": {
+        "language": "text/fhirpath",
+        "expression": "%totalScore"
+      }
+    }]
+  }]
+}`,
+  },
+]
+
+// ────────────────────────────────────────────────
+// POPULATION EXAMPLES
+// ────────────────────────────────────────────────
+
+export const populationMethodExamples = [
+  {
+    title: 'Observation-Based Population',
+    method: 'observation',
+    description: 'Tag items with observation codes; the server queries for recent Observations and prefills.',
+    snippet: `{
+  "linkId": "weight",
+  "text": "Body weight (kg)",
+  "type": "decimal",
+  "code": [{ "system": "http://loinc.org", "code": "29463-7", "display": "Body weight" }],
+  "extension": [{
+    "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-observationLinkPeriod",
+    "valueDuration": { "value": 1, "unit": "year", "system": "http://unitsofmeasure.org", "code": "a" }
+  }]
+}`,
+  },
+  {
+    title: 'Expression-Based: launchContext',
+    method: 'expression',
+    description: 'Declare named launch context variables that the form filler must supply.',
+    snippet: `{
+  "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-launchContext",
+  "extension": [
+    { "url": "name", "valueCoding": { "system": "http://hl7.org/fhir/uv/sdc/CodeSystem/launchContext", "code": "patient" } },
+    { "url": "type", "valueCode": "Patient" },
+    { "url": "description", "valueString": "The patient who is the subject of the form" }
+  ]
+}`,
+  },
+  {
+    title: 'Expression-Based: initialExpression',
+    method: 'expression',
+    description: 'Compute initial answer from launch context at form open.',
+    snippet: `{
+  "linkId": "patient-name",
+  "text": "Patient name",
+  "type": "string",
+  "readOnly": true,
+  "extension": [{
+    "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+    "valueExpression": {
+      "language": "text/fhirpath",
+      "expression": "%patient.name.where(use='official').given.first() + ' ' + %patient.name.where(use='official').family"
+    }
+  }]
+}`,
+  },
+  {
+    title: 'StructureMap-Based Population',
+    method: 'structuremap',
+    description: 'Reference a StructureMap that transforms source resources into a QuestionnaireResponse.',
+    snippet: `{
+  "resourceType": "Questionnaire",
+  "extension": [{
+    "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-sourceStructureMap",
+    "valueCanonical": "http://example.org/fhir/StructureMap/patient-to-demographics-form"
+  }],
+  "status": "active",
+  "item": [
+    { "linkId": "name", "text": "Name", "type": "string" },
+    { "linkId": "dob", "text": "Date of Birth", "type": "date" }
+  ]
+}`,
+  },
+  {
+    title: '$populate Operation Call',
+    method: 'operation',
+    description: 'How to invoke the $populate operation on a FHIR server.',
+    snippet: `POST [base]/Questionnaire/$populate
+Content-Type: application/fhir+json
+
+{
+  "resourceType": "Parameters",
+  "parameter": [
+    {
+      "name": "questionnaire",
+      "valueCanonical": "http://example.org/fhir/Questionnaire/antenatal-visit"
+    },
+    {
+      "name": "subject",
+      "valueReference": { "reference": "Patient/123" }
+    },
+    {
+      "name": "context",
+      "part": [
+        { "name": "name", "valueString": "encounter" },
+        { "name": "content", "valueReference": { "reference": "Encounter/456" } }
+      ]
+    }
+  ]
+}`,
+  },
+]
+
+// ────────────────────────────────────────────────
+// EXTRACTION METHOD EXAMPLES
+// ────────────────────────────────────────────────
+
+export const extractionMethodExamples = [
+  {
+    title: 'Observation-Based Extraction',
+    method: 'observation',
+    description: 'Tag items with observationExtract; each answer becomes an Observation.',
+    snippet: `{
+  "linkId": "systolic",
+  "text": "Systolic BP (mmHg)",
+  "type": "integer",
+  "code": [{ "system": "http://loinc.org", "code": "8480-6", "display": "Systolic blood pressure" }],
+  "extension": [{
+    "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-observationExtract",
+    "valueBoolean": true
+  }]
+}`,
+  },
+  {
+    title: 'Definition-Based Extraction',
+    method: 'definition',
+    description: 'Map items to StructureDefinition elements using the definition property.',
+    snippet: `{
+  "linkId": "patient-info",
+  "text": "Patient Information",
+  "type": "group",
+  "definition": "http://hl7.org/fhir/StructureDefinition/Patient",
+  "item": [
+    {
+      "linkId": "given-name",
+      "text": "First Name",
+      "type": "string",
+      "definition": "http://hl7.org/fhir/StructureDefinition/Patient#Patient.name.given"
+    },
+    {
+      "linkId": "family-name",
+      "text": "Last Name",
+      "type": "string",
+      "definition": "http://hl7.org/fhir/StructureDefinition/Patient#Patient.name.family"
+    },
+    {
+      "linkId": "birth-date",
+      "text": "Date of Birth",
+      "type": "date",
+      "definition": "http://hl7.org/fhir/StructureDefinition/Patient#Patient.birthDate"
+    }
+  ]
+}`,
+  },
+  {
+    title: 'StructureMap-Based Extraction',
+    method: 'structuremap',
+    description: 'Reference a StructureMap that transforms QuestionnaireResponse into target resources.',
+    snippet: `{
+  "resourceType": "Questionnaire",
+  "extension": [{
+    "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-targetStructureMap",
+    "valueCanonical": "http://example.org/fhir/StructureMap/response-to-bundle"
+  }],
+  "status": "active",
+  "item": [
+    { "linkId": "diagnosis", "text": "Primary diagnosis", "type": "choice" }
+  ]
+}`,
+  },
+  {
+    title: 'Template-Based Extraction',
+    method: 'template',
+    description: 'Define extraction templates with FHIRPath placeholders in contained resources.',
+    snippet: `{
+  "resourceType": "Questionnaire",
+  "contained": [{
+    "resourceType": "Bundle",
+    "id": "extraction-template",
+    "type": "transaction",
+    "entry": [{
+      "resource": {
+        "resourceType": "Observation",
+        "status": "final",
+        "code": { "coding": [{ "system": "http://loinc.org", "code": "8302-2" }] },
+        "valueQuantity": {
+          "_value": {
+            "extension": [{
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-templateExtractValue",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "%resource.item.where(linkId='height').answer.value"
+              }
+            }]
+          }
+        }
+      },
+      "request": { "method": "POST", "url": "Observation" }
+    }]
+  }],
+  "extension": [{
+    "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-templateExtract",
+    "valueReference": { "reference": "#extraction-template" }
+  }]
+}`,
+  },
+  {
+    title: '$extract Operation Call',
+    method: 'operation',
+    description: 'How to invoke the $extract operation on a FHIR server.',
+    snippet: `POST [base]/QuestionnaireResponse/$extract
+Content-Type: application/fhir+json
+
+{
+  "resourceType": "Parameters",
+  "parameter": [
+    {
+      "name": "questionnaire-response",
+      "resource": {
+        "resourceType": "QuestionnaireResponse",
+        "questionnaire": "http://example.org/fhir/Questionnaire/vitals-intake",
+        "status": "completed",
+        "item": [...]
+      }
+    }
+  ]
+}`,
+  },
+]
+
+// ────────────────────────────────────────────────
+// MODULAR FORMS EXAMPLES
+// ────────────────────────────────────────────────
+
+export const modularFormsExamples = [
+  {
+    title: 'Sub-Questionnaire Reference',
+    description: 'A display item that references a reusable sub-questionnaire via extension.',
+    snippet: `{
+  "linkId": "demographics-placeholder",
+  "text": "Demographics Sub-form",
+  "type": "display",
+  "extension": [{
+    "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-subQuestionnaire",
+    "valueCanonical": "http://example.org/fhir/Questionnaire/demographics-module|1.0"
+  }]
+}`,
+  },
+  {
+    title: 'Modular Root Questionnaire',
+    description: 'A parent form that assembles multiple sub-questionnaires.',
+    snippet: `{
+  "resourceType": "Questionnaire",
+  "url": "http://example.org/fhir/Questionnaire/annual-physical",
+  "status": "active",
+  "title": "Annual Physical Exam",
+  "extension": [{
+    "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-assemble-expectation",
+    "valueCode": "assemble-root"
+  }],
+  "item": [
+    {
+      "linkId": "demo-ref",
+      "text": "Demographics",
+      "type": "display",
+      "extension": [{
+        "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-subQuestionnaire",
+        "valueCanonical": "http://example.org/fhir/Questionnaire/demographics-module|1.0"
+      }]
+    },
+    {
+      "linkId": "vitals-ref",
+      "text": "Vital Signs",
+      "type": "display",
+      "extension": [{
+        "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-subQuestionnaire",
+        "valueCanonical": "http://example.org/fhir/Questionnaire/vitals-module|2.1"
+      }]
+    },
+    {
+      "linkId": "local-review",
+      "text": "Review of Systems",
+      "type": "group",
+      "item": [
+        { "linkId": "ros-cardio", "text": "Chest pain or palpitations?", "type": "boolean" },
+        { "linkId": "ros-respiratory", "text": "Shortness of breath?", "type": "boolean" }
+      ]
+    }
+  ]
+}`,
+  },
+  {
+    title: 'Reusable Sub-Questionnaire Module',
+    description: 'A standalone demographics module that can be included by any parent form.',
+    snippet: `{
+  "resourceType": "Questionnaire",
+  "url": "http://example.org/fhir/Questionnaire/demographics-module",
+  "version": "1.0",
+  "status": "active",
+  "title": "Demographics Module",
+  "extension": [{
+    "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-assemble-expectation",
+    "valueCode": "assemble-child"
+  }],
+  "item": [
+    { "linkId": "first-name", "text": "First name", "type": "string", "required": true },
+    { "linkId": "last-name", "text": "Last name", "type": "string", "required": true },
+    { "linkId": "dob", "text": "Date of birth", "type": "date", "required": true },
+    { "linkId": "gender", "text": "Gender", "type": "choice",
+      "answerOption": [
+        { "valueCoding": { "code": "male", "display": "Male" } },
+        { "valueCoding": { "code": "female", "display": "Female" } },
+        { "valueCoding": { "code": "other", "display": "Other" } }
+      ]
+    }
+  ]
+}`,
+  },
+  {
+    title: '$assemble Operation Call',
+    description: 'Invoke the $assemble operation to get a fully expanded Questionnaire.',
+    snippet: `POST [base]/Questionnaire/$assemble
+Content-Type: application/fhir+json
+
+{
+  "resourceType": "Parameters",
+  "parameter": [{
+    "name": "questionnaire",
+    "resource": {
+      "resourceType": "Questionnaire",
+      "url": "http://example.org/fhir/Questionnaire/annual-physical",
+      "status": "active",
+      "item": [
+        {
+          "linkId": "demo-ref",
+          "type": "display",
+          "extension": [{
+            "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-subQuestionnaire",
+            "valueCanonical": "http://example.org/fhir/Questionnaire/demographics-module|1.0"
+          }]
+        }
+      ]
+    }
+  }]
+}`,
+  },
+]
+
+// ────────────────────────────────────────────────
+// ADAPTIVE FORMS EXAMPLES
+// ────────────────────────────────────────────────
+
+export const adaptiveFormsExamples = [
+  {
+    title: 'Adaptive Questionnaire Shell',
+    description: 'A Questionnaire marked as adaptive — items are served via $next-question.',
+    snippet: `{
+  "resourceType": "Questionnaire",
+  "url": "http://example.org/fhir/Questionnaire/phq-cat",
+  "status": "active",
+  "title": "PHQ Depression Screen (Adaptive)",
+  "extension": [{
+    "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-questionnaireAdaptive",
+    "valueUrl": "http://example.org/fhir/adaptive-engine"
+  }]
+}`,
+  },
+  {
+    title: '$next-question — Step 1 (Initial Call)',
+    description: 'First call sends an empty QuestionnaireResponse to get the first question.',
+    snippet: `POST [base]/Questionnaire/$next-question
+Content-Type: application/fhir+json
+
+{
+  "resourceType": "Parameters",
+  "parameter": [{
+    "name": "questionnaire-response",
+    "resource": {
+      "resourceType": "QuestionnaireResponse",
+      "questionnaire": "http://example.org/fhir/Questionnaire/phq-cat",
+      "status": "in-progress",
+      "item": []
+    }
+  }]
+}`,
+  },
+  {
+    title: '$next-question — Server Returns Question',
+    description: 'Server responds with a QuestionnaireResponse containing the next unanswered question.',
+    snippet: `{
+  "resourceType": "QuestionnaireResponse",
+  "questionnaire": "http://example.org/fhir/Questionnaire/phq-cat",
+  "status": "in-progress",
+  "item": [
+    {
+      "linkId": "phq-1",
+      "text": "Little interest or pleasure in doing things?",
+      "answer": []
+    }
+  ]
+}`,
+  },
+  {
+    title: '$next-question — Step 2 (With Answer)',
+    description: 'Subsequent call includes the answered question; server returns the next.',
+    snippet: `POST [base]/Questionnaire/$next-question
+
+{
+  "resourceType": "Parameters",
+  "parameter": [{
+    "name": "questionnaire-response",
+    "resource": {
+      "resourceType": "QuestionnaireResponse",
+      "questionnaire": "http://example.org/fhir/Questionnaire/phq-cat",
+      "status": "in-progress",
+      "item": [
+        {
+          "linkId": "phq-1",
+          "text": "Little interest or pleasure in doing things?",
+          "answer": [{ "valueCoding": { "code": "several-days", "display": "Several days" } }]
+        },
+        {
+          "linkId": "phq-2",
+          "text": "Feeling down, depressed, or hopeless?",
+          "answer": []
+        }
+      ]
+    }
+  }]
+}`,
+  },
+  {
+    title: '$next-question — Completed',
+    description: 'When no more questions are needed, server returns status "completed" with final score.',
+    snippet: `{
+  "resourceType": "QuestionnaireResponse",
+  "questionnaire": "http://example.org/fhir/Questionnaire/phq-cat",
+  "status": "completed",
+  "item": [
+    { "linkId": "phq-1", "answer": [{ "valueCoding": { "code": "several-days" } }] },
+    { "linkId": "phq-2", "answer": [{ "valueCoding": { "code": "not-at-all" } }] },
+    { "linkId": "phq-3", "answer": [{ "valueCoding": { "code": "nearly-every-day" } }] },
+    {
+      "linkId": "total-score",
+      "text": "Total Score",
+      "answer": [{ "valueInteger": 4 }]
+    }
+  ]
+}`,
+  },
+]
+
+// ────────────────────────────────────────────────
+// WORKFLOW / CONFORMANCE DATA
+// ────────────────────────────────────────────────
+
+export const workflowRoles = [
+  {
+    role: 'Form Designer',
+    description: 'Creates, edits, tests, and publishes Questionnaire definitions. Adds rendering, behavior, population, and extraction extensions.',
+    operations: ['Create/Update Questionnaire', 'Validate', 'Publish'],
+    icon: '✏️',
+  },
+  {
+    role: 'Form Filler',
+    description: 'Renders questionnaires for end users, supports population, handles enableWhen/calculations, and produces QuestionnaireResponse.',
+    operations: ['$populate', 'Render', 'Validate response', 'Submit'],
+    icon: '📝',
+  },
+  {
+    role: 'Form Manager',
+    description: 'Stores, versions, and serves Questionnaire resources. Supports search by URL, status, context, publisher.',
+    operations: ['CRUD', 'Search', '$assemble', 'Version management'],
+    icon: '📂',
+  },
+  {
+    role: 'Form Receiver',
+    description: 'Accepts completed QuestionnaireResponse submissions. May trigger $extract to create clinical resources.',
+    operations: ['Accept QR', '$extract', 'Validate', 'Store'],
+    icon: '📥',
+  },
+  {
+    role: 'Form Archiver',
+    description: 'Stores QuestionnaireResponses for long-term retention, audit, and retrieval.',
+    operations: ['Store', 'Search', 'Retrieve', 'Audit log'],
+    icon: '🗄️',
+  },
+]
+
+export const conformanceProfiles = [
+  { profile: 'SDC Base Questionnaire', url: 'sdc-questionnaire', description: 'Minimal SDC metadata and item extensions.' },
+  { profile: 'SDC Advanced Rendering', url: 'sdc-questionnaire-render', description: 'Full rendering extensions: itemControl, rendering-style, etc.' },
+  { profile: 'SDC Behavior', url: 'sdc-questionnaire-behave', description: 'enableWhen, calculations, constraints, scoring.' },
+  { profile: 'SDC Population', url: 'sdc-questionnaire-pop-exp', description: 'launchContext, initialExpression, observationLinkPeriod.' },
+  { profile: 'SDC Extraction (Observation)', url: 'sdc-questionnaire-extr-obsn', description: 'observationExtract for simple vital signs extraction.' },
+  { profile: 'SDC Extraction (Definition)', url: 'sdc-questionnaire-extr-defn', description: 'Definition-based extraction to any resource type.' },
+  { profile: 'SDC Extraction (StructureMap)', url: 'sdc-questionnaire-extr-smap', description: 'StructureMap-based extraction.' },
+  { profile: 'SDC Extraction (Template)', url: 'sdc-questionnaire-extr-template', description: 'Template-based extraction with FHIRPath placeholders.' },
+  { profile: 'SDC Modular', url: 'sdc-questionnaire-modular', description: 'subQuestionnaire and $assemble support.' },
+  { profile: 'SDC Adaptive', url: 'sdc-questionnaire-adapt', description: 'questionnaireAdaptive and $next-question.' },
+]
+
+export const questionnaireSearchParams = [
+  { param: 'url', type: 'uri', description: 'Canonical URL of the Questionnaire.' },
+  { param: 'version', type: 'token', description: 'Business version.' },
+  { param: 'name', type: 'string', description: 'Computer-friendly name.' },
+  { param: 'title', type: 'string', description: 'Human-readable title.' },
+  { param: 'status', type: 'token', description: 'draft | active | retired | unknown.' },
+  { param: 'publisher', type: 'string', description: 'Publishing organization.' },
+  { param: 'context', type: 'token', description: 'useContext value.' },
+  { param: 'context-type', type: 'token', description: 'Type of useContext.' },
+  { param: 'date', type: 'date', description: 'Publication date.' },
+  { param: 'description', type: 'string', description: 'Questionnaire description text.' },
+  { param: 'jurisdiction', type: 'token', description: 'Geographic jurisdiction.' },
+  { param: 'identifier', type: 'token', description: 'Business identifier.' },
+]
