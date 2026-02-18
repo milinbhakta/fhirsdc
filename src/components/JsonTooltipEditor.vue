@@ -5,7 +5,8 @@ import { EditorView, hoverTooltip } from '@codemirror/view'
 import { basicSetup } from 'codemirror'
 import { json } from '@codemirror/lang-json'
 import { autocompletion } from '@codemirror/autocomplete'
-import { getPropertyTooltip, getPropertyGuide } from '@/data/fhirPropertyTooltips'
+import { getPropertyTooltip } from '@/data/fhirPropertyTooltips'
+import { schemas, knownExtensionUrls, constraintExtensionKeys } from '@/data/fhirJsonSchema'
 
 const props = defineProps({
   modelValue: {
@@ -86,29 +87,257 @@ function keyAtPosition(lineText, columnIndex) {
   return null
 }
 
+/**
+ * Build the nesting path by bracket-counting with proper string skipping.
+ * Returns the property path (e.g. ['item'] when inside an item array element).
+ */
+function getJsonPath(doc, pos) {
+  const text = doc.sliceString(0, pos)
+  const stack = [] // { key: string|null, type: 'object'|'array' }
+  let i = 0
+  let lastKey = null
+
+  while (i < text.length) {
+    const ch = text[i]
+
+    if (ch === '"') {
+      // Skip entire string, determine if it's a key
+      i++ // past opening quote
+      const strStart = i
+      while (i < text.length) {
+        if (text[i] === '\\') { i += 2; continue } // skip escaped chars
+        if (text[i] === '"') break
+        i++
+      }
+      const strContent = text.substring(strStart, i)
+      if (i < text.length) i++ // past closing quote
+
+      // Check if followed by colon → this string is a key
+      let j = i
+      while (j < text.length && ' \t\n\r'.includes(text[j])) j++
+      if (j < text.length && text[j] === ':') {
+        lastKey = strContent
+      }
+    } else if (ch === '{') {
+      stack.push({ key: lastKey, type: 'object' })
+      lastKey = null
+      i++
+    } else if (ch === '[') {
+      stack.push({ key: lastKey, type: 'array' })
+      lastKey = null
+      i++
+    } else if (ch === '}' || ch === ']') {
+      stack.pop()
+      lastKey = null
+      i++
+    } else if (ch === ',') {
+      lastKey = null
+      i++
+    } else {
+      i++
+    }
+  }
+
+  return stack.map(s => s.key).filter(Boolean)
+}
+
+/**
+ * Walk the FHIR schema tree following the path to get the schema at the cursor's nesting level.
+ */
+function getSchemaAtPath(resourceType, path) {
+  const rootSchema = schemas[resourceType]
+  if (!rootSchema) return null
+
+  let schema = rootSchema
+  for (const key of path) {
+    if (!schema) return null
+    const prop = schema[key]
+    if (!prop) return null
+    if (prop.children) {
+      schema = prop.children
+    } else {
+      return null
+    }
+  }
+  return schema
+}
+
+/**
+ * Main completion source. Determines position (key vs value) using the text
+ * immediately before the matched token, then delegates to key or value completions.
+ */
 function fhirJsonCompletion(context) {
-  // Only complete inside JSON key quotes: "key": ...
-  const before = context.matchBefore(/"[\w]*$/)
-  if (!before && !context.explicit) return null
+  if (!schemas[props.resourceType]) return null
 
-  const guide = getPropertyGuide(props.resourceType)
-  if (!guide || Object.keys(guide).length === 0) return null
+  try {
+    const path = getJsonPath(context.state.doc, context.pos)
 
-  const typed = before ? before.text.replace(/^"/,'') : ''
-  const options = Object.entries(guide)
+    // Try matching a quoted string token (most common JSON editing scenario)
+    const beforeQuoted = context.matchBefore(/"[\w:/.\-]*$/)
+
+    if (beforeQuoted) {
+      // Determine if this quoted string is a key or a value
+      // by checking the last significant character before the opening quote
+      const textBeforeQuote = context.state.doc.sliceString(
+        Math.max(0, beforeQuoted.from - 200), beforeQuoted.from,
+      )
+      const trimmed = textBeforeQuote.trimEnd()
+      const lastChar = trimmed.length > 0 ? trimmed[trimmed.length - 1] : ''
+
+      if (lastChar === ':') {
+        // VALUE position — find the key name
+        const keyMatch = trimmed.match(/"([^"]+)"\s*:$/)
+        if (keyMatch) {
+          return getValueCompletions(context, keyMatch[1], path)
+        }
+        return null
+      }
+
+      // KEY position (after {, comma, [, or start of document)
+      return getKeyCompletions(context, path, beforeQuoted)
+    }
+
+    // Fallback: match bare word characters (typing without opening quote)
+    const beforeWord = context.matchBefore(/[a-zA-Z]\w*$/)
+    if (beforeWord) {
+      return getKeyCompletions(context, path, null, beforeWord)
+    }
+
+    // Ctrl+Space explicit completion
+    if (context.explicit) {
+      return getKeyCompletions(context, path, null, null)
+    }
+
+    return null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Provide key completions at the current schema path.
+ * @param {object} context - CodeMirror completion context
+ * @param {string[]} path - Current nesting path
+ * @param {object|null} quotedMatch - Match from /"[\w]*$/ (cursor inside quotes)
+ * @param {object|null} wordMatch - Match from /[a-zA-Z]\w*$/ (cursor typing bare word)
+ */
+function getKeyCompletions(context, path, quotedMatch, wordMatch) {
+  const schema = getSchemaAtPath(props.resourceType, path)
+  if (!schema) return null
+
+  const typed = quotedMatch
+    ? quotedMatch.text.replace(/^"/, '')
+    : (wordMatch ? wordMatch.text : '')
+
+  const options = Object.entries(schema)
     .filter(([key]) => !typed || key.toLowerCase().startsWith(typed.toLowerCase()))
-    .map(([key, desc]) => ({
+    .map(([key, prop]) => ({
       label: key,
       type: 'property',
-      detail: desc.length > 60 ? desc.slice(0, 60) + '…' : desc,
-      boost: key.toLowerCase().startsWith(typed.toLowerCase()) ? 2 : 0,
+      detail: prop.description
+        ? (prop.description.length > 55 ? prop.description.slice(0, 55) + '…' : prop.description)
+        : '',
+      boost: typed && key.toLowerCase().startsWith(typed.toLowerCase()) ? 2 : 0,
+      apply: createKeyApply(key, prop),
     }))
 
   if (!options.length) return null
+
+  let from
+  if (quotedMatch) {
+    from = quotedMatch.from + 1 // after the opening quote
+  } else if (wordMatch) {
+    from = wordMatch.from
+  } else {
+    from = context.pos
+  }
+
+  return { from, options, validFor: /^[\w]*$/ }
+}
+
+function createKeyApply(key, prop) {
+  if (prop.type === 'array') return `${key}": [`
+  if (prop.type === 'object') return `${key}": {`
+  if (prop.type === 'boolean') return `${key}": `
+  if (prop.type === 'number') return `${key}": `
+  return `${key}": "`
+}
+
+/**
+ * Provide value completions for enum properties, extension URLs, and constraint keys.
+ */
+function getValueCompletions(context, currentKey, path) {
+  const beforeQuoted = context.matchBefore(/"[\w:/.\-]*$/)
+
+  // Extension URLs
+  if (currentKey === 'url' && path.some(p => p === 'extension')) {
+    const typed = beforeQuoted ? beforeQuoted.text.replace(/^"/, '') : ''
+    const options = knownExtensionUrls
+      .filter(e => !typed || e.url.toLowerCase().includes(typed.toLowerCase()))
+      .map(e => ({
+        label: e.url,
+        type: 'text',
+        detail: e.description,
+        boost: e.url.toLowerCase().includes(typed.toLowerCase()) ? 2 : 0,
+      }))
+    if (!options.length) return null
+    return {
+      from: beforeQuoted ? beforeQuoted.from + 1 : context.pos,
+      options,
+      validFor: /^[\w:/.\-]*$/,
+    }
+  }
+
+  // Constraint extension sub-keys
+  if (currentKey === 'url') {
+    const textBefore = context.state.doc.sliceString(Math.max(0, context.pos - 600), context.pos)
+    if (textBefore.includes('questionnaire-constraint')) {
+      const typed = beforeQuoted ? beforeQuoted.text.replace(/^"/, '') : ''
+      const options = constraintExtensionKeys
+        .filter(e => !typed || e.url.toLowerCase().startsWith(typed.toLowerCase()))
+        .map(e => ({
+          label: e.url,
+          type: 'text',
+          detail: e.description,
+          boost: 2,
+        }))
+      if (options.length) {
+        return {
+          from: beforeQuoted ? beforeQuoted.from + 1 : context.pos,
+          options,
+          validFor: /^[\w]*$/,
+        }
+      }
+    }
+  }
+
+  // Enum values from schema
+  const schema = getSchemaAtPath(props.resourceType, path)
+  if (!schema) return null
+
+  const prop = schema[currentKey]
+  if (!prop?.enum) return null
+
+  const typed = beforeQuoted ? beforeQuoted.text.replace(/^"/, '') : ''
+  const options = prop.enum
+    .map(val => ({ label: String(val), type: 'enum', boost: 2 }))
+    .filter(opt => !typed || opt.label.toLowerCase().startsWith(typed.toLowerCase()))
+
+  if (!options.length) return null
+
+  if (prop.type === 'boolean' || prop.type === 'number') {
+    const wordBefore = context.matchBefore(/[\w]*$/)
+    return {
+      from: wordBefore ? wordBefore.from : context.pos,
+      options,
+      validFor: /^[\w]*$/,
+    }
+  }
+
   return {
-    from: before ? before.from + 1 : context.pos, // +1 to skip the opening quote
+    from: beforeQuoted ? beforeQuoted.from + 1 : context.pos,
     options,
-    validFor: /^[\w]*$/,
+    validFor: /^[\w\-]*$/,
   }
 }
 
