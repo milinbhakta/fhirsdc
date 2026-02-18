@@ -2,13 +2,13 @@
 import { computed, ref, watch } from 'vue'
 import fhirpath from 'fhirpath'
 import DynamicQuestionnaireForm from '@/components/DynamicQuestionnaireForm.vue'
+import JsonTooltipEditor from '@/components/JsonTooltipEditor.vue'
 import ResourceTreeNode from '@/components/ResourceTreeNode.vue'
 import { getPropertyGuide } from '@/data/fhirPropertyTooltips'
 import {
-  extractionMappingExamples,
-  fhirPathExamples,
   sampleQuestionnaire,
   sampleQuestionnaireResponse,
+  sampleScenarios,
 } from '@/data/r4Samples'
 
 const tabs = [
@@ -19,10 +19,14 @@ const tabs = [
 ]
 
 const activeTab = ref('tree')
+const selectedScenarioId = ref(sampleScenarios[0]?.id || 'baseline')
 
 const selectedResourceType = ref('Questionnaire')
 const questionnaireJson = ref(JSON.stringify(sampleQuestionnaire, null, 2))
 const responseJson = ref(JSON.stringify(sampleQuestionnaireResponse, null, 2))
+const selectedTreeNode = ref(null)
+const treeControlMode = ref('')
+const treeControlToken = ref(0)
 
 const selectedFhirPathResource = ref('QuestionnaireResponse')
 const fhirPathExpression = ref("item.where(linkId='pain').answer.valueCoding.display")
@@ -34,6 +38,13 @@ const generatedResponse = ref(sampleQuestionnaireResponse)
 const selectedJson = computed(() =>
   selectedResourceType.value === 'Questionnaire' ? questionnaireJson.value : responseJson.value,
 )
+
+const activeScenario = computed(
+  () => sampleScenarios.find((scenario) => scenario.id === selectedScenarioId.value) || sampleScenarios[0],
+)
+
+const activeFhirPathExamples = computed(() => activeScenario.value?.fhirPathExamples || [])
+const activeExtractionMappings = computed(() => activeScenario.value?.extractionMappingExamples || [])
 
 const selectedParsed = computed(() => safeParse(selectedJson.value))
 
@@ -78,7 +89,7 @@ const propertyGuideEntries = computed(() =>
 const extractionPreview = computed(() => {
   const source = generatedResponse.value
 
-  return extractionMappingExamples.map((mapping) => {
+  return activeExtractionMappings.value.map((mapping) => {
     try {
       const result = fhirpath.evaluate(source, mapping.fhirPath)
       return {
@@ -104,6 +115,13 @@ watch(
     runFhirPath()
   },
   { immediate: true },
+)
+
+watch(
+  () => selectedScenarioId.value,
+  () => {
+    loadScenario()
+  },
 )
 
 function safeParse(rawValue) {
@@ -142,6 +160,25 @@ function applyExample(expression) {
   runFhirPath()
 }
 
+function loadScenario() {
+  const scenario = activeScenario.value
+  if (!scenario) {
+    return
+  }
+
+  questionnaireJson.value = JSON.stringify(scenario.questionnaire, null, 2)
+  responseJson.value = JSON.stringify(scenario.questionnaireResponse, null, 2)
+  generatedResponse.value = scenario.questionnaireResponse
+  selectedResourceType.value = 'Questionnaire'
+  selectedTreeNode.value = null
+
+  if (scenario.fhirPathExamples?.length) {
+    fhirPathExpression.value = scenario.fhirPathExamples[0].expression
+  }
+
+  runFhirPath()
+}
+
 function updateGeneratedResponse(nextResponse) {
   generatedResponse.value = nextResponse
 }
@@ -153,6 +190,20 @@ function updateSelectedResourceJson(nextValue) {
   }
 
   responseJson.value = nextValue
+}
+
+function expandAllTreeNodes() {
+  treeControlMode.value = 'expand'
+  treeControlToken.value += 1
+}
+
+function collapseAllTreeNodes() {
+  treeControlMode.value = 'collapse'
+  treeControlToken.value += 1
+}
+
+function onTreeNodeSelected(payload) {
+  selectedTreeNode.value = payload
 }
 
 function validateQuestionnaire(resource) {
@@ -356,6 +407,17 @@ function buildExtractionBundle(response) {
         Learn by editing real Questionnaire + QuestionnaireResponse JSON, exploring their tree structure,
         evaluating FHIRPath expressions, and generating response payloads from a form.
       </p>
+
+      <div class="row">
+        <label class="label" for="scenario-selector">Scenario</label>
+        <select id="scenario-selector" v-model="selectedScenarioId" class="input">
+          <option v-for="scenario in sampleScenarios" :key="scenario.id" :value="scenario.id">
+            {{ scenario.label }}
+          </option>
+        </select>
+      </div>
+
+      <p v-if="activeScenario?.description" class="hint">{{ activeScenario.description }}</p>
     </section>
 
     <section class="tabs card">
@@ -382,11 +444,16 @@ function buildExtractionBundle(response) {
         </select>
       </div>
 
-      <textarea
-        :value="selectedResourceType === 'Questionnaire' ? questionnaireJson : responseJson"
-        class="editor"
-        rows="14"
-        @input="updateSelectedResourceJson($event.target.value)"
+      <div class="btn-row">
+        <button type="button" class="example-btn" @click="expandAllTreeNodes">Expand all</button>
+        <button type="button" class="example-btn" @click="collapseAllTreeNodes">Collapse all</button>
+      </div>
+
+      <JsonTooltipEditor
+        :model-value="selectedResourceType === 'Questionnaire' ? questionnaireJson : responseJson"
+        :resource-type="selectedResourceType"
+        :min-height="340"
+        @update:model-value="updateSelectedResourceJson"
       />
 
       <p v-if="selectedParsed.error" class="error">JSON parse error: {{ selectedParsed.error }}</p>
@@ -397,8 +464,20 @@ function buildExtractionBundle(response) {
             node-key="root"
             :node-value="activeTreeData"
             :resource-type="selectedTreeResourceType"
+            :selected-path="selectedTreeNode?.path || ''"
+            :tree-control-mode="treeControlMode"
+            :tree-control-token="treeControlToken"
+            @select-node="onTreeNodeSelected"
           />
         </ul>
+      </div>
+
+      <div v-if="selectedTreeNode" class="selected-node card-lite">
+        <h4>Selected Node</h4>
+        <p><strong>Path:</strong> {{ selectedTreeNode.path }}</p>
+        <p><strong>Kind:</strong> {{ selectedTreeNode.kind }}</p>
+        <p><strong>Description:</strong> {{ selectedTreeNode.tooltip || 'No tooltip for this key.' }}</p>
+        <pre class="output">{{ JSON.stringify(selectedTreeNode.value, null, 2) }}</pre>
       </div>
 
       <div v-if="!selectedParsed.error" class="property-guide">
@@ -442,7 +521,7 @@ function buildExtractionBundle(response) {
 
       <div class="example-grid">
         <button
-          v-for="example in fhirPathExamples"
+          v-for="example in activeFhirPathExamples"
           :key="example.label"
           type="button"
           class="example-btn"
@@ -462,7 +541,11 @@ function buildExtractionBundle(response) {
         <strong> calculatedExpression</strong>.
       </p>
 
-      <textarea v-model="questionnaireJson" class="editor" rows="12" />
+      <JsonTooltipEditor
+        v-model="questionnaireJson"
+        resource-type="Questionnaire"
+        :min-height="300"
+      />
 
       <p v-if="questionnaireParsed.error" class="error">{{ questionnaireParsed.error }}</p>
 

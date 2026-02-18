@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { getPropertyTooltip } from '@/data/fhirPropertyTooltips'
 
 const props = defineProps({
@@ -19,7 +19,25 @@ const props = defineProps({
     type: String,
     default: '',
   },
+  path: {
+    type: String,
+    default: 'root',
+  },
+  selectedPath: {
+    type: String,
+    default: '',
+  },
+  treeControlMode: {
+    type: String,
+    default: '',
+  },
+  treeControlToken: {
+    type: Number,
+    default: 0,
+  },
 })
+
+const emit = defineEmits(['select-node'])
 
 const isObject = (value) => value !== null && typeof value === 'object'
 const isArray = (value) => Array.isArray(value)
@@ -33,11 +51,76 @@ const asEntries = (value) => {
 }
 
 const tooltip = computed(() => getPropertyTooltip(props.resourceType, props.nodeKey))
+const hasChildren = computed(() => isObject(props.nodeValue) && asEntries(props.nodeValue).length > 0)
+const isExpanded = ref(props.level < 2)
+const isSelected = computed(() => props.selectedPath && props.selectedPath === props.path)
+
+watch(
+  () => [props.treeControlToken, props.treeControlMode],
+  () => {
+    if (!hasChildren.value) {
+      return
+    }
+
+    if (props.treeControlMode === 'expand') {
+      isExpanded.value = true
+      return
+    }
+
+    if (props.treeControlMode === 'collapse') {
+      isExpanded.value = false
+    }
+  },
+)
+
+function toggleExpand() {
+  if (!hasChildren.value) {
+    return
+  }
+  isExpanded.value = !isExpanded.value
+}
+
+function childPath(childKey) {
+  if (props.path === 'root') {
+    return String(childKey)
+  }
+
+  if (/^\d+$/.test(String(childKey))) {
+    return `${props.path}[${childKey}]`
+  }
+
+  return `${props.path}.${childKey}`
+}
+
+function selectNode() {
+  emit('select-node', {
+    path: props.path,
+    key: props.nodeKey,
+    value: props.nodeValue,
+    tooltip: tooltip.value,
+    kind: isArray(props.nodeValue) ? 'Array' : isObject(props.nodeValue) ? 'Object' : typeof props.nodeValue,
+  })
+}
+
+function emitSelectNode(payload) {
+  emit('select-node', payload)
+}
 </script>
 
 <template>
   <li class="tree-node" :style="{ '--level': String(level) }">
-    <div class="node-row">
+    <div class="node-row" :class="{ selected: isSelected }" @click="selectNode">
+      <button
+        v-if="hasChildren"
+        type="button"
+        class="toggle-btn"
+        :title="isExpanded ? 'Collapse node' : 'Expand node'"
+        @click.stop="toggleExpand"
+      >
+        {{ isExpanded ? '▾' : '▸' }}
+      </button>
+      <span v-else class="toggle-placeholder" />
+
       <span :title="tooltip" class="node-key" :class="{ 'has-tooltip': tooltip }">
         {{ nodeKey }}
       </span>
@@ -46,14 +129,19 @@ const tooltip = computed(() => getPropertyTooltip(props.resourceType, props.node
       <span v-else class="node-kind">{{ isArray(nodeValue) ? 'Array' : 'Object' }}</span>
     </div>
 
-    <ul v-if="isObject(nodeValue)" class="node-children">
+    <ul v-if="hasChildren && isExpanded" class="node-children">
       <ResourceTreeNode
         v-for="([childKey, childValue], index) in asEntries(nodeValue)"
-        :key="`${nodeKey}-${childKey}-${index}`"
+        :key="`${path}-${childKey}-${index}`"
         :node-key="childKey"
         :node-value="childValue"
         :level="level + 1"
         :resource-type="resourceType"
+        :path="childPath(childKey)"
+        :selected-path="selectedPath"
+        :tree-control-mode="treeControlMode"
+        :tree-control-token="treeControlToken"
+        @select-node="emitSelectNode"
       />
     </ul>
   </li>
@@ -71,6 +159,26 @@ const tooltip = computed(() => getPropertyTooltip(props.resourceType, props.node
   gap: 0.6rem;
   padding: 0.2rem 0;
   border-bottom: 1px solid var(--color-border);
+  cursor: pointer;
+}
+
+.node-row.selected {
+  background: var(--color-background-mute);
+}
+
+.toggle-btn,
+.toggle-placeholder {
+  width: 1rem;
+  min-width: 1rem;
+}
+
+.toggle-btn {
+  border: none;
+  background: transparent;
+  color: var(--color-text-soft);
+  padding: 0;
+  line-height: 1;
+  cursor: pointer;
 }
 
 .node-key {
