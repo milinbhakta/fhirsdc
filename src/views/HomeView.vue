@@ -6,6 +6,9 @@ import JsonTooltipEditor from '@/components/JsonTooltipEditor.vue'
 import ResourceTreeNode from '@/components/ResourceTreeNode.vue'
 import { getPropertyGuide } from '@/data/fhirPropertyTooltips'
 import {
+  fhirR4FhirPathFunctionGroups,
+  fhirR4FhirPathOperators,
+  prepopulationExamples,
   sampleQuestionnaire,
   sampleQuestionnaireResponse,
   sampleScenarios,
@@ -20,6 +23,7 @@ const tabs = [
 
 const activeTab = ref('tree')
 const selectedScenarioId = ref(sampleScenarios[0]?.id || 'baseline')
+const cheatSheetQuery = ref('')
 
 const selectedResourceType = ref('Questionnaire')
 const questionnaireJson = ref(JSON.stringify(sampleQuestionnaire, null, 2))
@@ -85,6 +89,43 @@ const selectedTreeResourceType = computed(
 const propertyGuideEntries = computed(() =>
   Object.entries(getPropertyGuide(selectedTreeResourceType.value)),
 )
+
+const normalizedCheatSheetQuery = computed(() => cheatSheetQuery.value.trim().toLowerCase())
+
+const filteredFhirPathOperators = computed(() => {
+  const query = normalizedCheatSheetQuery.value
+  if (!query) {
+    return fhirR4FhirPathOperators
+  }
+
+  return fhirR4FhirPathOperators.filter(
+    (operator) =>
+      operator.symbol.toLowerCase().includes(query) || operator.meaning.toLowerCase().includes(query),
+  )
+})
+
+const filteredFhirPathFunctionGroups = computed(() => {
+  const query = normalizedCheatSheetQuery.value
+  if (!query) {
+    return fhirR4FhirPathFunctionGroups
+  }
+
+  return fhirR4FhirPathFunctionGroups
+    .map((group) => {
+      const filteredFunctions = group.functions.filter((entry) => entry.toLowerCase().includes(query))
+      const categoryMatches = group.category.toLowerCase().includes(query)
+
+      if (!categoryMatches && !filteredFunctions.length) {
+        return null
+      }
+
+      return {
+        ...group,
+        functions: categoryMatches ? group.functions : filteredFunctions,
+      }
+    })
+    .filter(Boolean)
+})
 
 const extractionPreview = computed(() => {
   const source = generatedResponse.value
@@ -619,6 +660,62 @@ function buildExtractionBundle(response) {
         <li>3. Run FHIRPath expressions against both resources.</li>
         <li>4. Use Tree Visualizer to understand nested item structure.</li>
       </ul>
+
+      <h4>Prepopulation examples</h4>
+      <div class="reference-grid">
+        <article
+          v-for="example in prepopulationExamples"
+          :key="example.title"
+          class="reference-card"
+        >
+          <h5>{{ example.title }}</h5>
+          <p>{{ example.description }}</p>
+          <pre class="output">{{ example.snippet }}</pre>
+        </article>
+      </div>
+
+      <h4>FHIRPath operators (R4 commonly used)</h4>
+      <div class="row">
+        <label class="label" for="fhirpath-cheatsheet-search">Search</label>
+        <input
+          id="fhirpath-cheatsheet-search"
+          v-model="cheatSheetQuery"
+          class="input"
+          placeholder="Search operators/functions, e.g. where, count, =, contains"
+        />
+      </div>
+
+      <div class="reference-grid compact">
+        <article
+          v-for="operator in filteredFhirPathOperators"
+          :key="operator.symbol"
+          class="reference-card"
+        >
+          <h5>{{ operator.symbol }}</h5>
+          <p>{{ operator.meaning }}</p>
+        </article>
+      </div>
+
+      <h4>FHIRPath functions (R4 commonly used)</h4>
+      <div class="reference-grid">
+        <article
+          v-for="group in filteredFhirPathFunctionGroups"
+          :key="group.category"
+          class="reference-card"
+        >
+          <h5>{{ group.category }}</h5>
+          <p>{{ group.functions.join(', ') }}</p>
+        </article>
+      </div>
+      <p
+        v-if="!filteredFhirPathOperators.length && !filteredFhirPathFunctionGroups.length"
+        class="hint"
+      >
+        No matches for “{{ cheatSheetQuery }}”.
+      </p>
+      <p class="hint">
+        Note: exact runtime support depends on the evaluator implementation used by your app/server.
+      </p>
     </section>
   </main>
 </template>

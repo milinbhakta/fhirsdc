@@ -169,6 +169,30 @@ a {
   gap: 0.45rem;
 }
 
+.reference-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 0.7rem;
+}
+
+.reference-grid.compact {
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+}
+
+.reference-card {
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-background);
+  padding: 0.7rem;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.reference-card h5 {
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
 .issue-list .success {
   color: #2d8a39;
 }

@@ -608,3 +608,169 @@ export const sampleQuestionnaire = sampleScenarios[0].questionnaire
 export const sampleQuestionnaireResponse = sampleScenarios[0].questionnaireResponse
 export const fhirPathExamples = sampleScenarios[0].fhirPathExamples
 export const extractionMappingExamples = sampleScenarios[0].extractionMappingExamples
+
+export const prepopulationExamples = [
+  {
+    title: 'Questionnaire item.initial (static default values)',
+    description: 'Use Questionnaire.item.initial for form defaults before user input.',
+    snippet: `{
+  "resourceType": "Questionnaire",
+  "status": "active",
+  "item": [
+    {
+      "linkId": "visit-date",
+      "text": "Visit date",
+      "type": "date",
+      "initial": [{ "valueDate": "2026-02-18" }]
+    },
+    {
+      "linkId": "facility",
+      "text": "Facility",
+      "type": "string",
+      "initial": [{ "valueString": "Community Clinic A" }]
+    }
+  ]
+}`,
+  },
+  {
+    title: 'SDC initialExpression (dynamic prepopulation)',
+    description:
+      'Use SDC extension initialExpression to derive initial values from launch/patient context on the server or form engine.',
+    snippet: `{
+  "linkId": "patient-age",
+  "text": "Patient age",
+  "type": "integer",
+  "readOnly": true,
+  "extension": [
+    {
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+      "valueExpression": {
+        "language": "text/fhirpath",
+        "expression": "today().year() - %patient.birthDate.toString().substring(0,4).toInteger()"
+      }
+    }
+  ]
+}`,
+  },
+  {
+    title: 'Prepopulate from existing QuestionnaireResponse',
+    description: 'Common workflow: fetch previous answers and prefill when rendering follow-up forms.',
+    snippet: `{
+  "resourceType": "QuestionnaireResponse",
+  "questionnaire": "http://example.org/fhir/Questionnaire/chronic-care-followup",
+  "status": "in-progress",
+  "item": [
+    {
+      "linkId": "demographics",
+      "item": [
+        { "linkId": "first-name", "answer": [{ "valueString": "Nora" }] },
+        { "linkId": "dob", "answer": [{ "valueDate": "1978-11-22" }] }
+      ]
+    },
+    {
+      "linkId": "medications",
+      "item": [
+        { "linkId": "med-name", "answer": [{ "valueString": "Metformin" }] }
+      ]
+    }
+  ]
+}`,
+  },
+]
+
+export const fhirR4FhirPathOperators = [
+  { symbol: '.', meaning: 'Navigation (child/property access)' },
+  { symbol: '|', meaning: 'Union of collections' },
+  { symbol: '=', meaning: 'Equals' },
+  { symbol: '!=', meaning: 'Not equals' },
+  { symbol: '~', meaning: 'Equivalent' },
+  { symbol: '!~', meaning: 'Not equivalent' },
+  { symbol: '>', meaning: 'Greater than' },
+  { symbol: '<', meaning: 'Less than' },
+  { symbol: '>=', meaning: 'Greater than or equal' },
+  { symbol: '<=', meaning: 'Less than or equal' },
+  { symbol: '+, -, *, /, div, mod', meaning: 'Math operators' },
+  { symbol: 'and, or, xor, implies', meaning: 'Boolean/logical operators' },
+  { symbol: 'in, contains', meaning: 'Membership / containment' },
+  { symbol: 'is, as', meaning: 'Type operators' },
+]
+
+export const fhirR4FhirPathFunctionGroups = [
+  {
+    category: 'Existence & Filtering',
+    functions: [
+      'where()',
+      'select()',
+      'repeat()',
+      'ofType()',
+      'exists()',
+      'empty()',
+      'all()',
+      'anyTrue()',
+      'allTrue()',
+    ],
+  },
+  {
+    category: 'Collection / Positional',
+    functions: [
+      'count()',
+      'distinct()',
+      'isDistinct()',
+      'first()',
+      'last()',
+      'tail()',
+      'skip()',
+      'take()',
+      'intersect()',
+      'exclude()',
+    ],
+  },
+  {
+    category: 'String',
+    functions: [
+      'substring()',
+      'startsWith()',
+      'endsWith()',
+      'contains()',
+      'replace()',
+      'matches()',
+      'length()',
+      'upper()',
+      'lower()',
+      'trim()',
+    ],
+  },
+  {
+    category: 'Math & Aggregation',
+    functions: [
+      'abs()',
+      'ceiling()',
+      'floor()',
+      'round()',
+      'sqrt()',
+      'power()',
+      'sum()',
+      'min()',
+      'max()',
+      'avg()',
+    ],
+  },
+  {
+    category: 'Date/Time',
+    functions: ['now()', 'today()', 'timeOfDay()', 'toDate()', 'toDateTime()', 'toTime()'],
+  },
+  {
+    category: 'Conversion & Utility',
+    functions: [
+      'toString()',
+      'toInteger()',
+      'toDecimal()',
+      'toBoolean()',
+      'iif()',
+      'coalesce()',
+      'trace()',
+      'children()',
+      'descendants()',
+    ],
+  },
+]

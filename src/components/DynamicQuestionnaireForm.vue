@@ -163,6 +163,33 @@ function normalizeComparable(value) {
   return String(value)
 }
 
+function initialAnswerToValue(initialAnswer) {
+  if (!initialAnswer) {
+    return undefined
+  }
+
+  if (Object.hasOwn(initialAnswer, 'valueString')) return initialAnswer.valueString
+  if (Object.hasOwn(initialAnswer, 'valueDate')) return initialAnswer.valueDate
+  if (Object.hasOwn(initialAnswer, 'valueInteger')) return initialAnswer.valueInteger
+  if (Object.hasOwn(initialAnswer, 'valueDecimal')) return initialAnswer.valueDecimal
+  if (Object.hasOwn(initialAnswer, 'valueBoolean')) return initialAnswer.valueBoolean
+  if (Object.hasOwn(initialAnswer, 'valueCoding')) return initialAnswer.valueCoding?.code
+  return undefined
+}
+
+function applyInitialValues() {
+  flatQuestions.value.forEach((item) => {
+    if (isCalculated(item)) {
+      return
+    }
+
+    const initialValue = initialAnswerToValue(item.initial?.[0])
+    if (initialValue !== undefined && answers[item.linkId] === undefined) {
+      answers[item.linkId] = initialValue
+    }
+  })
+}
+
 function getCalculatedExpression(item) {
   const extension = item?.extension?.find(
     (entry) =>
@@ -279,12 +306,14 @@ watch(
     Object.keys(answers).forEach((key) => {
       delete answers[key]
     })
+    applyInitialValues()
     refreshStateAndEmit()
   },
   { deep: true },
 )
 
 onMounted(() => {
+  applyInitialValues()
   refreshStateAndEmit()
 })
 </script>
