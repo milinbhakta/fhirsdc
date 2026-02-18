@@ -468,6 +468,7 @@ onMounted(() => {
         :value="answers[item.linkId] || ''"
         :disabled="isCalculated(item)"
         @input="onInput(item, $event.target.value)"
+        @change="onInput(item, $event.target.value)"
         @blur="onBlur(item)"
       />
 
