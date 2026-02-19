@@ -503,12 +503,21 @@ function pgUpdateResponse(resp) {
 }
 
 // ── Server-Side Operations from Playground ──
-import { validateResource as _validateResource, createResource as _createResource, updateResource as _updateResource } from '@/utils/fhirClient'
+import { validateResource as _validateResource, createResource as _createResource, updateResource as _updateResource, populateQuestionnaire as _populateQuestionnaire, extractResponse as _extractResponse } from '@/utils/fhirClient'
 const pgServerValidateResult = ref(null)
 const pgServerValidateLoading = ref(false)
 const pgServerValidateError = ref('')
 const pgUploadLoading = ref(false)
 const pgUploadResult = ref('')
+
+// ── Populate & Extract State ──
+const pgPopulateLoading = ref(false)
+const pgPopulateResult = ref(null)
+const pgPopulateError = ref('')
+const pgPopulateSubject = ref('Patient/example')
+const pgExtractLoading = ref(false)
+const pgExtractResult = ref(null)
+const pgExtractError = ref('')
 
 const hasActiveServer = computed(() => !!serverStatus.value.fhir)
 
@@ -574,6 +583,59 @@ function pgRunFhirPath() {
 
 watch(pgFhirPathExpr, () => { pgRunFhirPath() })
 watch(pgGeneratedResponse, () => { pgRunFhirPath() })
+
+// ── Populate: call $populate on the server ──
+async function pgPopulate() {
+  if (!hasActiveServer.value) {
+    pgPopulateError.value = 'No FHIR server configured. Go to the FHIR Server tab to add one.'
+    pgOutputTab.value = 'populate'
+    return
+  }
+  pgPopulateLoading.value = true
+  pgPopulateError.value = ''
+  pgPopulateResult.value = null
+  pgOutputTab.value = 'populate'
+  try {
+    const servers = _loadServers()
+    const activeServer = _getActiveServer(servers, 'fhir')
+    if (!activeServer) throw new Error('No active FHIR server')
+    const q = JSON.parse(pgJson.value)
+    const qUrl = q.url || `Questionnaire/${q.id || 'unknown'}`
+    const result = await _populateQuestionnaire(activeServer, qUrl, pgPopulateSubject.value || undefined)
+    pgPopulateResult.value = result
+  } catch (err) {
+    pgPopulateError.value = err.message
+  }
+  pgPopulateLoading.value = false
+}
+
+// ── Extract: call $extract on the server ──
+async function pgExtract() {
+  if (!hasActiveServer.value) {
+    pgExtractError.value = 'No FHIR server configured. Go to the FHIR Server tab to add one.'
+    pgOutputTab.value = 'extract'
+    return
+  }
+  if (!pgGeneratedResponse.value) {
+    pgExtractError.value = 'No QuestionnaireResponse available — fill the form first.'
+    pgOutputTab.value = 'extract'
+    return
+  }
+  pgExtractLoading.value = true
+  pgExtractError.value = ''
+  pgExtractResult.value = null
+  pgOutputTab.value = 'extract'
+  try {
+    const servers = _loadServers()
+    const activeServer = _getActiveServer(servers, 'fhir')
+    if (!activeServer) throw new Error('No active FHIR server')
+    const result = await _extractResponse(activeServer, pgGeneratedResponse.value)
+    pgExtractResult.value = result
+  } catch (err) {
+    pgExtractError.value = err.message
+  }
+  pgExtractLoading.value = false
+}
 
 // ── Playground Mode ──
 const pgMode = ref('form') // 'form' | 'fhirpath'
@@ -2270,6 +2332,12 @@ function buildExtractionBundle(response) {
                   <button class="btn btn-sm" :class="{ 'btn-primary': hasActiveServer }" @click="pgUploadToServer" :disabled="pgUploadLoading || pgParsed.error || !hasActiveServer" :title="hasActiveServer ? 'Upload to FHIR server' : 'No FHIR server configured — go to FHIR Server tab'">
                     {{ pgUploadLoading ? '⏳' : '☁️' }} Upload
                   </button>
+                  <button class="btn btn-sm" :class="{ 'btn-primary': hasActiveServer }" @click="pgPopulate" :disabled="pgPopulateLoading || pgParsed.error || !hasActiveServer" :title="hasActiveServer ? 'Pre-populate via $populate' : 'No FHIR server configured'">
+                    {{ pgPopulateLoading ? '⏳' : '📥' }} Populate
+                  </button>
+                  <button class="btn btn-sm" :class="{ 'btn-primary': hasActiveServer }" @click="pgExtract" :disabled="pgExtractLoading || !pgGeneratedResponse || !hasActiveServer" :title="hasActiveServer ? 'Extract resources via $extract' : 'No FHIR server configured'">
+                    {{ pgExtractLoading ? '⏳' : '📤' }} Extract
+                  </button>
                   <span v-if="pgParsed.error" style="color: var(--c-danger); font-size: 0.75rem;">Invalid JSON</span>
                   <span v-else style="color: var(--c-success); font-size: 0.75rem;">Valid</span>
                   <span v-if="!hasActiveServer" style="color: var(--c-warning, #b45309); font-size: 0.7rem; opacity: 0.8;" title="Configure a FHIR server in the FHIR Server tab to enable server features">⚠️ No server</span>
@@ -2297,6 +2365,8 @@ function buildExtractionBundle(response) {
                       { id: 'form', label: 'Live Form' },
                       { id: 'response', label: 'Response JSON' },
                       { id: 'fhirpath', label: 'FHIRPath' },
+                      { id: 'populate', label: 'Populate' },
+                      { id: 'extract', label: 'Extract' },
                       { id: 'validate', label: 'Validation' },
                     ]"
                     :key="ot.id"
@@ -2337,6 +2407,93 @@ function buildExtractionBundle(response) {
                   <div v-if="pgFhirPathError" class="error-text">{{ pgFhirPathError }}</div>
                   <pre v-else class="code-output" style="height: 100%; margin: 0; border-radius: 0;">{{ pgFhirPathResult || '// Result will appear here' }}</pre>
                 </div>
+              </div>
+
+              <!-- Populate -->
+              <div v-if="pgOutputTab === 'populate'" class="pane-body" style="padding: 1.5rem; overflow: auto;">
+                <h4 style="margin: 0 0 0.75rem 0;">📥 Pre-Population ($populate)</h4>
+                <p style="font-size: 0.85rem; color: var(--c-text-secondary); margin-bottom: 1rem;">
+                  Calls <code>Questionnaire/$populate</code> on the configured FHIR server to pre-fill a QuestionnaireResponse using the patient's existing data.
+                </p>
+                <div style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 1rem; flex-wrap: wrap;">
+                  <label style="font-size: 0.8rem; font-weight: 600; white-space: nowrap;">Subject Reference:</label>
+                  <input v-model="pgPopulateSubject" class="input-select" style="font-size: 0.8rem; min-width: 200px; flex: 1; max-width: 320px;" placeholder="e.g. Patient/123" />
+                  <button class="btn btn-sm btn-primary" @click="pgPopulate" :disabled="pgPopulateLoading || pgParsed.error || !hasActiveServer">
+                    {{ pgPopulateLoading ? '⏳ Populating...' : '▶ Run $populate' }}
+                  </button>
+                </div>
+                <div v-if="!hasActiveServer" style="padding: 0.75rem; border-radius: 6px; background: #fffbeb; color: #92400e; font-size: 0.85rem; margin-bottom: 1rem; border-left: 3px solid #f59e0b;">
+                  ⚠️ No FHIR server configured. Go to the <strong>FHIR Server</strong> tab to connect one.
+                </div>
+                <div v-if="pgPopulateError" style="padding: 0.75rem; border-radius: 6px; background: #fef2f2; color: #991b1b; font-size: 0.85rem; margin-bottom: 1rem; border-left: 3px solid #dc2626;">
+                  ❌ {{ pgPopulateError }}
+                </div>
+                <div v-if="pgPopulateResult">
+                  <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                    <span style="color: #166534; font-weight: 600;">✅ Population successful</span>
+                    <span style="font-size: 0.75rem; color: var(--c-text-tertiary);">{{ pgPopulateResult.resourceType }}</span>
+                  </div>
+                  <pre class="code-output" style="margin: 0; max-height: 400px; overflow: auto;">{{ JSON.stringify(pgPopulateResult, null, 2) }}</pre>
+                </div>
+                <div v-if="!pgPopulateResult && !pgPopulateError && !pgPopulateLoading" style="color: var(--c-text-tertiary); font-size: 0.85rem; font-style: italic;">
+                  Click <strong>📥 Populate</strong> or <strong>▶ Run $populate</strong> to pre-populate this questionnaire from server data.
+                </div>
+                <details style="margin-top: 1.5rem;">
+                  <summary style="cursor: pointer; font-size: 0.85rem; font-weight: 600; color: var(--c-text-secondary);">ℹ️ How $populate works</summary>
+                  <ul style="color: var(--c-text-secondary); font-size: 0.82rem; line-height: 1.8; padding-left: 1.2rem; margin-top: 0.5rem;">
+                    <li>The FHIR server takes the Questionnaire URL and a subject reference.</li>
+                    <li>It queries for existing data (Observations, Conditions, etc.) matching <code>code</code>, <code>initialExpression</code>, or <code>observationLinkPeriod</code>.</li>
+                    <li>Returns a pre-filled <code>QuestionnaireResponse</code> with <code>status: in-progress</code>.</li>
+                    <li>Requires the Questionnaire to already exist on the server — use <strong>☁️ Upload</strong> first.</li>
+                  </ul>
+                </details>
+              </div>
+
+              <!-- Extract -->
+              <div v-if="pgOutputTab === 'extract'" class="pane-body" style="padding: 1.5rem; overflow: auto;">
+                <h4 style="margin: 0 0 0.75rem 0;">📤 Data Extraction ($extract)</h4>
+                <p style="font-size: 0.85rem; color: var(--c-text-secondary); margin-bottom: 1rem;">
+                  Calls <code>QuestionnaireResponse/$extract</code> on the configured FHIR server to generate FHIR resources (Observations, Conditions, etc.) from the completed form answers.
+                </p>
+                <div style="margin-bottom: 1rem;">
+                  <button class="btn btn-sm btn-primary" @click="pgExtract" :disabled="pgExtractLoading || !pgGeneratedResponse || !hasActiveServer">
+                    {{ pgExtractLoading ? '⏳ Extracting...' : '▶ Run $extract' }}
+                  </button>
+                  <span v-if="!pgGeneratedResponse" style="font-size: 0.78rem; color: var(--c-text-tertiary); margin-left: 0.5rem;">Fill the form first to generate a response.</span>
+                </div>
+                <div v-if="!hasActiveServer" style="padding: 0.75rem; border-radius: 6px; background: #fffbeb; color: #92400e; font-size: 0.85rem; margin-bottom: 1rem; border-left: 3px solid #f59e0b;">
+                  ⚠️ No FHIR server configured. Go to the <strong>FHIR Server</strong> tab to connect one.
+                </div>
+                <div v-if="pgExtractError" style="padding: 0.75rem; border-radius: 6px; background: #fef2f2; color: #991b1b; font-size: 0.85rem; margin-bottom: 1rem; border-left: 3px solid #dc2626;">
+                  ❌ {{ pgExtractError }}
+                </div>
+                <div v-if="pgExtractResult">
+                  <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                    <span style="color: #166534; font-weight: 600;">✅ Extraction successful</span>
+                    <span v-if="pgExtractResult.resourceType === 'Bundle'" style="font-size: 0.75rem; color: var(--c-text-tertiary);">{{ pgExtractResult.entry?.length || 0 }} resource(s) extracted</span>
+                    <span v-else style="font-size: 0.75rem; color: var(--c-text-tertiary);">{{ pgExtractResult.resourceType }}</span>
+                  </div>
+                  <template v-if="pgExtractResult.resourceType === 'Bundle' && pgExtractResult.entry?.length">
+                    <div v-for="(entry, idx) in pgExtractResult.entry" :key="idx" style="margin-bottom: 1rem;">
+                      <div style="font-size: 0.8rem; font-weight: 600; color: var(--c-accent); margin-bottom: 0.25rem;">{{ entry.resource?.resourceType || 'Resource' }} #{{ idx + 1 }}</div>
+                      <pre class="code-output" style="margin: 0; max-height: 250px; overflow: auto;">{{ JSON.stringify(entry.resource || entry, null, 2) }}</pre>
+                    </div>
+                  </template>
+                  <pre v-else class="code-output" style="margin: 0; max-height: 400px; overflow: auto;">{{ JSON.stringify(pgExtractResult, null, 2) }}</pre>
+                </div>
+                <div v-if="!pgExtractResult && !pgExtractError && !pgExtractLoading" style="color: var(--c-text-tertiary); font-size: 0.85rem; font-style: italic;">
+                  Click <strong>📤 Extract</strong> or <strong>▶ Run $extract</strong> to extract FHIR resources from the current form response.
+                </div>
+                <details style="margin-top: 1.5rem;">
+                  <summary style="cursor: pointer; font-size: 0.85rem; font-weight: 600; color: var(--c-text-secondary);">ℹ️ How $extract works</summary>
+                  <ul style="color: var(--c-text-secondary); font-size: 0.82rem; line-height: 1.8; padding-left: 1.2rem; margin-top: 0.5rem;">
+                    <li>The server reads the QuestionnaireResponse and its linked Questionnaire.</li>
+                    <li>Items tagged with <code>observationExtract</code> become Observations.</li>
+                    <li>Items with <code>definition</code> URLs map to the target resource elements.</li>
+                    <li>StructureMap-based extraction transforms the entire response via a FHIR Mapping Language map.</li>
+                    <li>Returns a <code>Bundle</code> of created/proposed resources (Observations, Conditions, etc.).</li>
+                  </ul>
+                </details>
               </div>
 
               <!-- Validation -->
