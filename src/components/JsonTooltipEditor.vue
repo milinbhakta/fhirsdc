@@ -25,7 +25,7 @@ const containerRef = ref(null)
 let editor = null
 let completionDisposable = null
 let hoverDisposable = null
-let isUpdatingFromProp = false
+let ignoreNextWatch = false
 
 // ─── JSON Path Analysis ──────────────────────────────────────────────
 
@@ -472,8 +472,8 @@ function createEditor() {
     lineNumbers: 'on',
     tabSize: 2,
     wordWrap: 'on',
-    formatOnPaste: true,
-    formatOnType: true,
+    formatOnPaste: false,
+    formatOnType: false,
     autoClosingBrackets: 'always',
     autoClosingQuotes: 'always',
     bracketPairColorization: { enabled: true },
@@ -501,9 +501,9 @@ function createEditor() {
   })
 
   editor.onDidChangeModelContent(() => {
-    if (isUpdatingFromProp) return
-    const value = editor.getValue()
-    emit('update:modelValue', value)
+    if (ignoreNextWatch) return
+    ignoreNextWatch = true
+    emit('update:modelValue', editor.getValue())
   })
 
   registerCompletionProvider()
@@ -531,16 +531,21 @@ watch(
   () => props.modelValue,
   (nextValue) => {
     if (!editor) return
+    if (ignoreNextWatch) {
+      ignoreNextWatch = false
+      return
+    }
     const current = editor.getValue()
     if (current === nextValue) return
 
-    isUpdatingFromProp = true
-    const fullRange = editor.getModel().getFullModelRange()
+    // External change (e.g. template switch) — replace content preserving undo stack
+    const model = editor.getModel()
+    editor.pushUndoStop()
     editor.executeEdits('external', [{
-      range: fullRange,
+      range: model.getFullModelRange(),
       text: nextValue,
     }])
-    isUpdatingFromProp = false
+    editor.pushUndoStop()
   },
 )
 
