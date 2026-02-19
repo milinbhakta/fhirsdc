@@ -1626,7 +1626,6 @@ function buildExtractionBundle(response) {
           @click="goToStep(tab.id)"
         >
           <span>{{ tab.label }}</span>
-          <span v-if="tab.id === activeTab" class="nav-badge">Active</span>
         </button>
       </nav>
 
