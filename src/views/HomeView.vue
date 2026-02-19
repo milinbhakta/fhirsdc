@@ -406,6 +406,13 @@ const pgOutputTab = ref('form')
 
 const pgParsed = computed(() => safeParse(pgJson.value))
 
+function formatPgJson() {
+  try {
+    const parsed = JSON.parse(pgJson.value)
+    pgJson.value = JSON.stringify(parsed, null, 2)
+  } catch { /* ignore invalid JSON */ }
+}
+
 const pgValidationIssues = computed(() => {
   if (pgParsed.value.error) return ['JSON is not valid: ' + pgParsed.value.error]
   return validateQuestionnaire(pgParsed.value.value)
