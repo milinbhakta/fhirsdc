@@ -1662,6 +1662,24 @@ function tryInPlayground(snippet) {
       }
       pgJson.value = JSON.stringify(wrapped, null, 2)
     }
+    // If it's an item-level extension snippet (has url but no linkId), wrap in a sample item
+    else if (parsed.url && !parsed.linkId) {
+      const wrapped = {
+        resourceType: 'Questionnaire',
+        id: 'playground-example',
+        status: 'active',
+        title: 'Playground Example',
+        item: [
+          {
+            linkId: 'example-item',
+            text: 'Example item',
+            type: 'string',
+            extension: [parsed],
+          },
+        ],
+      }
+      pgJson.value = JSON.stringify(wrapped, null, 2)
+    }
     // Any other valid JSON (e.g. QuestionnaireResponse, Parameters) — load as-is
     else {
       pgJson.value = JSON.stringify(parsed, null, 2)
@@ -3092,6 +3110,7 @@ function buildExtractionBundle(response) {
                       <span v-for="c in ext.codes" :key="c" style="font-size: 0.7rem; padding: 0.1rem 0.4rem; background: var(--c-accent-light); border-radius: 4px; color: var(--c-accent);">{{ c }}</span>
                     </div>
                     <pre class="code-output" style="font-size: 0.7rem; max-height: 150px; overflow: auto;">{{ ext.snippet }}</pre>
+                    <button v-if="isJsonSnippet(ext.snippet)" class="btn btn-sm" style="margin-top: 0.5rem;" @click="tryInPlayground(ext.snippet)">🧪 Try in Playground</button>
                   </article>
                 </div>
             </template>
@@ -3104,6 +3123,7 @@ function buildExtractionBundle(response) {
                     <h5>{{ example.title }}</h5>
                     <p class="hint-text" style="margin-bottom: 0.5rem;">{{ example.description }}</p>
                     <pre class="code-output" style="font-size: 0.7rem; max-height: 200px; overflow: auto;">{{ example.snippet }}</pre>
+                    <button v-if="isJsonSnippet(example.snippet)" class="btn btn-sm" style="margin-top: 0.5rem;" @click="tryInPlayground(example.snippet)">🧪 Try in Playground</button>
                   </article>
                 </div>
             </template>
