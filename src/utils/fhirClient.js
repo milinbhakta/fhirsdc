@@ -50,7 +50,7 @@ export function getActiveServer(servers, type = 'fhir') {
   return servers.find(s => s.type === type && s.active) || servers.find(s => s.type === type) || null
 }
 
-export function createServerConfig({ name, url, type = 'fhir', auth = 'none', token = '', headers = {} }) {
+export function createServerConfig({ name, url, type = 'fhir', auth = 'none', token = '', headers = {}, corsProxy = false, corsProxyUrl = '' }) {
   return {
     id: `custom-${Date.now()}`,
     name,
@@ -59,6 +59,8 @@ export function createServerConfig({ name, url, type = 'fhir', auth = 'none', to
     auth,
     token,
     headers,
+    corsProxy,
+    corsProxyUrl: corsProxyUrl.replace(/\/+$/, ''),
     active: false,
   }
 }
@@ -77,8 +79,26 @@ function buildHeaders(server) {
   return h
 }
 
+/**
+ * Build the final URL, optionally routing through a CORS proxy.
+ * Supported proxy patterns:
+ *   - Prefix style: "https://corsproxy.io/?"  → https://corsproxy.io/?https://myserver/path
+ *   - Path style:   "https://myproxy.com"     → https://myproxy.com/https://myserver/path
+ */
+function buildUrl(server, path) {
+  const target = `${server.url}${path.startsWith('/') ? '' : '/'}${path}`
+  if (!server.corsProxy || !server.corsProxyUrl) return target
+  const proxy = server.corsProxyUrl
+  // If proxy URL ends with ? or &, append target as query param (corsproxy.io style)
+  if (proxy.endsWith('?') || proxy.endsWith('&')) {
+    return `${proxy}${encodeURIComponent(target)}`
+  }
+  // Otherwise use path style
+  return `${proxy}/${target}`
+}
+
 async function fhirFetch(server, path, options = {}) {
-  const url = `${server.url}${path.startsWith('/') ? '' : '/'}${path}`
+  const url = buildUrl(server, path)
   let resp
   try {
     resp = await fetch(url, {
@@ -92,11 +112,10 @@ async function fhirFetch(server, path, options = {}) {
     // Network errors include CORS blocks, DNS failures, server unreachable
     const msg = networkErr.message || 'Network error'
     if (msg === 'Failed to fetch' || msg.includes('NetworkError') || msg.includes('CORS')) {
-      throw new Error(
-        `Network error — the server may be blocking browser requests (CORS). ` +
-        `If using Azure FHIR, enable CORS in Azure Portal → FHIR service → CORS settings, ` +
-        `or use a CORS proxy. Original: ${msg}`
-      )
+      const hint = server.corsProxy
+        ? `CORS proxy is enabled but the request still failed. Check that the proxy URL is correct and running.`
+        : `The server is blocking browser requests (CORS). Enable the CORS Proxy option in server settings, or if using Azure FHIR, enable CORS in Azure Portal → FHIR service → CORS settings.`
+      throw new Error(`Network error — ${hint} Original: ${msg}`)
     }
     throw new Error(`Network error: ${msg}`)
   }

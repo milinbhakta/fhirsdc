@@ -21,7 +21,7 @@ const emit = defineEmits(['load-questionnaire', 'server-status-change'])
 // ── Server Management ──
 const servers = ref([])
 const showAddForm = ref(false)
-const newServer = ref({ name: '', url: '', type: 'fhir', auth: 'none', token: '' })
+const newServer = ref({ name: '', url: '', type: 'fhir', auth: 'none', token: '', corsProxy: false, corsProxyUrl: '' })
 const connectionResults = ref({}) // { [serverId]: { ok, fhirVersion, software, error } }
 const testingId = ref(null)
 
@@ -56,7 +56,7 @@ function addServer() {
   const cfg = createServerConfig(newServer.value)
   servers.value.push(cfg)
   persist()
-  newServer.value = { name: '', url: '', type: 'fhir', auth: 'none', token: '' }
+  newServer.value = { name: '', url: '', type: 'fhir', auth: 'none', token: '', corsProxy: false, corsProxyUrl: '' }
   showAddForm.value = false
 }
 
@@ -69,6 +69,13 @@ function setActive(server) {
   servers.value.forEach(s => {
     if (s.type === server.type) s.active = (s.id === server.id)
   })
+  persist()
+}
+
+function onCorsToggle(server) {
+  if (server.corsProxy && !server.corsProxyUrl) {
+    server.corsProxyUrl = 'https://corsproxy.io/?'
+  }
   persist()
 }
 
@@ -304,6 +311,18 @@ defineExpose({ activeFhirServer, activeTermServer, browseSearch })
           <label>Token</label>
           <input v-model="newServer.token" class="input-field" type="password" placeholder="Bearer token" />
         </div>
+        <div class="form-row" style="align-items: center;">
+          <label>CORS&nbsp;Proxy</label>
+          <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.85rem;">
+            <input type="checkbox" v-model="newServer.corsProxy" />
+            Enable CORS proxy (for servers that block browser requests)
+          </label>
+        </div>
+        <div v-if="newServer.corsProxy" class="form-row">
+          <label>Proxy URL</label>
+          <input v-model="newServer.corsProxyUrl" class="input-field" placeholder="https://corsproxy.io/?" />
+          <span style="font-size: 0.72rem; color: var(--c-text-tertiary); margin-top: 0.25rem; display: block;">Public: <code>https://corsproxy.io/?</code> · Self-hosted: run <code>npx cors-anywhere</code> → <code>http://localhost:8080</code></span>
+        </div>
         <button class="btn" style="margin-top: 0.5rem;" @click="addServer">Add Server</button>
       </div>
 
@@ -324,7 +343,18 @@ defineExpose({ activeFhirServer, activeTermServer, browseSearch })
               <button v-if="server.id.startsWith('custom-')" class="btn btn-sm btn-danger" @click="removeServer(server.id)">✕</button>
             </div>
           </div>
-          <div class="server-card-url">{{ server.url }}</div>
+          <div class="server-card-url">
+            {{ server.url }}
+            <span v-if="server.corsProxy" class="cors-proxy-badge" title="CORS proxy enabled">🔀 Proxy</span>
+          </div>
+          <!-- Inline CORS proxy toggle for existing servers -->
+          <div v-if="server.id.startsWith('custom-')" class="cors-toggle-row">
+            <label style="display: flex; align-items: center; gap: 0.4rem; cursor: pointer; font-size: 0.78rem; color: var(--c-text-secondary);">
+              <input type="checkbox" v-model="server.corsProxy" @change="onCorsToggle(server)" />
+              CORS Proxy
+            </label>
+            <input v-if="server.corsProxy" v-model="server.corsProxyUrl" class="input-field" style="flex: 1; font-size: 0.78rem; padding: 0.2rem 0.4rem;" placeholder="https://corsproxy.io/?" @change="persist()" />
+          </div>
           <div v-if="connectionResults[server.id]" class="connection-status" :class="{ success: connectionResults[server.id].ok, error: connectionResults[server.id].ok === false }">
             <template v-if="connectionResults[server.id].testing">Testing connection...</template>
             <template v-else-if="connectionResults[server.id].ok">
@@ -345,6 +375,16 @@ defineExpose({ activeFhirServer, activeTermServer, browseSearch })
           <li><strong>tx.fhir.org</strong>: <code>https://tx.fhir.org/r4</code> — HL7 official terminology server</li>
           <li><strong>Firely Server</strong>: <code>https://server.fire.ly</code> — .NET based FHIR server</li>
           <li><strong>SMART Health IT</strong>: <code>https://r4.smarthealthit.org</code> — synthetic patient data</li>
+        </ul>
+      </div>
+
+      <div class="hint-box" style="margin-top: 1rem;">
+        <h4>🔀 CORS Troubleshooting</h4>
+        <p style="font-size: 0.85rem; margin: 0.5rem 0 0;">Getting <strong>"Failed to fetch"</strong> or <strong>CORS errors</strong>? The FHIR server is blocking browser requests.</p>
+        <ul style="margin: 0.5rem 0 0; padding-left: 1.2rem; font-size: 0.85rem;">
+          <li><strong>Azure FHIR</strong>: In Azure Portal → your FHIR service → <em>CORS</em> → add your site's origin (e.g. <code>http://localhost:5173</code> or <code>https://yoursite.com</code>), and set allowed headers to <code>*</code></li>
+          <li><strong>Quick fix</strong>: Enable the CORS Proxy option on your server config, and use <code>https://corsproxy.io/?</code> as the proxy URL</li>
+          <li><strong>Self-hosted proxy</strong>: Run <code>npx cors-anywhere</code> locally and use <code>http://localhost:8080</code></li>
         </ul>
       </div>
     </div>
@@ -712,6 +752,29 @@ defineExpose({ activeFhirServer, activeTermServer, browseSearch })
   margin-top: 0.25rem;
   font-family: 'SF Mono', 'Fira Code', monospace;
   word-break: break-all;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.cors-proxy-badge {
+  display: inline-block;
+  font-size: 0.65rem;
+  background: var(--c-info-bg, #eff6ff);
+  color: var(--c-info, #1e40af);
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+  font-family: system-ui, sans-serif;
+  white-space: nowrap;
+}
+
+.cors-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.35rem;
+  flex-wrap: wrap;
 }
 
 .connection-status {
