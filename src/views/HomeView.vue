@@ -2326,6 +2326,30 @@ function buildExtractionBundle(response) {
                   <span style="font-size: 0.85rem;">{{ issue }}</span>
                 </div>
 
+                <!-- Server Validation Results -->
+                <template v-if="pgServerValidateResult || pgServerValidateError">
+                  <h4 style="margin: 2rem 0 0.75rem 0;">🏥 Server Validation</h4>
+                  <div v-if="pgServerValidateError" style="display: flex; align-items: flex-start; gap: 0.5rem; margin-bottom: 0.5rem; padding: 0.5rem 0.75rem; border-radius: 6px; background: #fef2f2; color: #991b1b;">
+                    <span style="font-size: 1rem;">✗</span>
+                    <span style="font-size: 0.85rem;">{{ pgServerValidateError }}</span>
+                  </div>
+                  <div v-if="pgServerValidateResult?.issue?.length" v-for="(issue, idx) in pgServerValidateResult.issue" :key="'sv-' + idx"
+                    style="display: flex; flex-direction: column; gap: 0.2rem; margin-bottom: 0.5rem; padding: 0.5rem 0.75rem; border-radius: 6px; font-size: 0.85rem;"
+                    :style="{
+                      background: issue.severity === 'error' || issue.severity === 'fatal' ? '#fef2f2' : issue.severity === 'warning' ? '#fffbeb' : '#f0fdf4',
+                      color: issue.severity === 'error' || issue.severity === 'fatal' ? '#991b1b' : issue.severity === 'warning' ? '#92400e' : '#166534',
+                      borderLeft: `3px solid ${issue.severity === 'error' || issue.severity === 'fatal' ? '#dc2626' : issue.severity === 'warning' ? '#f59e0b' : '#16a34a'}`
+                    }">
+                    <span style="font-weight: 600; text-transform: capitalize;">{{ issue.severity === 'error' ? '❌' : issue.severity === 'warning' ? '⚠️' : '✅' }} {{ issue.severity }}</span>
+                    <span>{{ issue.diagnostics || issue.details?.text || 'No details' }}</span>
+                    <span v-if="issue.location?.length" style="font-family: monospace; font-size: 0.75rem; opacity: 0.7;">{{ issue.location.join(', ') }}</span>
+                  </div>
+                  <div v-if="pgServerValidateResult && !pgServerValidateResult.issue?.length && !pgServerValidateError"
+                    style="display: flex; align-items: center; gap: 0.5rem; padding: 0.75rem; border-radius: 6px; background: #f0fdf4; color: #166534;">
+                    ✅ Server validation passed — no issues found!
+                  </div>
+                </template>
+
                 <h4 style="margin: 2rem 0 0.75rem 0;">Quick Tips</h4>
                 <ul style="color: var(--c-text-secondary); font-size: 0.85rem; line-height: 1.8; padding-left: 1.2rem;">
                   <li>Every item needs a unique <strong>linkId</strong> and a <strong>type</strong>.</li>
@@ -2334,6 +2358,8 @@ function buildExtractionBundle(response) {
                   <li>Add <strong>enableWhen</strong> for conditional visibility.</li>
                   <li>Use <strong>readOnly: true</strong> on calculated items.</li>
                   <li>Add the <strong>constraint</strong> extension for custom validation with a <strong>human</strong> error message.</li>
+                  <li>Click <strong>🏥 Validate</strong> in the editor toolbar to check against a real FHIR server.</li>
+                  <li>Click <strong>☁️ Upload</strong> to push your Questionnaire to the connected server.</li>
                 </ul>
               </div>
             </div>
