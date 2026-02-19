@@ -25,7 +25,8 @@ const containerRef = ref(null)
 let editor = null
 let completionDisposable = null
 let hoverDisposable = null
-let ignoreNextWatch = false
+let formattingDisposable = null
+let lastEmittedValue = null
 
 // ─── JSON Path Analysis ──────────────────────────────────────────────
 
@@ -501,26 +502,117 @@ function createEditor() {
   })
 
   editor.onDidChangeModelContent(() => {
-    if (ignoreNextWatch) return
-    ignoreNextWatch = true
-    emit('update:modelValue', editor.getValue())
+    const val = editor.getValue()
+    lastEmittedValue = val
+    emit('update:modelValue', val)
   })
 
   registerCompletionProvider()
   registerHoverProvider()
+  registerFormattingProvider()
 
-  // Format JSON action (Shift+Alt+F)
+  // ── Clipboard: explicit Cmd/Ctrl+V paste handler ──────────────────
+  // Monaco's built-in paste can silently fail in web browsers if the
+  // Clipboard API permission is denied.  We override the keybinding
+  // to read the clipboard ourselves and fall back gracefully.
+  editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyV, async () => {
+    try {
+      const text = await navigator.clipboard.readText()
+      if (!text) return
+      editor.pushUndoStop()
+      const sel = editor.getSelection()
+      editor.executeEdits('clipboard-paste', [{
+        range: sel,
+        text,
+        forceMoveMarkers: true,
+      }])
+      editor.pushUndoStop()
+    } catch {
+      // Clipboard API denied – trigger Monaco's native paste as fallback
+      editor.trigger('keyboard', 'editor.action.clipboardPasteAction', null)
+    }
+  })
+
+  // ── Clipboard: explicit Cmd/Ctrl+C copy handler ──────────────────
+  editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyC, async () => {
+    const sel = editor.getSelection()
+    let text = ''
+    if (sel && !sel.isEmpty()) {
+      text = editor.getModel().getValueInRange(sel)
+    } else {
+      // Copy entire line when nothing is selected (VS Code behaviour)
+      const pos = editor.getPosition()
+      if (pos) {
+        text = editor.getModel().getLineContent(pos.lineNumber) + '\n'
+      }
+    }
+    if (text) {
+      try {
+        await navigator.clipboard.writeText(text)
+      } catch { /* ignore */ }
+    }
+  })
+
+  // ── Clipboard: explicit Cmd/Ctrl+X cut handler ───────────────────
+  editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyX, async () => {
+    const sel = editor.getSelection()
+    let text = ''
+    let range = sel
+    if (sel && !sel.isEmpty()) {
+      text = editor.getModel().getValueInRange(sel)
+    } else {
+      // Cut entire line when nothing is selected
+      const pos = editor.getPosition()
+      if (pos) {
+        const lineNum = pos.lineNumber
+        text = editor.getModel().getLineContent(lineNum) + '\n'
+        range = new monaco.Range(lineNum, 1, lineNum + 1, 1)
+      }
+    }
+    if (text) {
+      try {
+        await navigator.clipboard.writeText(text)
+      } catch { /* ignore */ }
+      editor.pushUndoStop()
+      editor.executeEdits('clipboard-cut', [{
+        range,
+        text: '',
+        forceMoveMarkers: true,
+      }])
+      editor.pushUndoStop()
+    }
+  })
+
+  // Format JSON shortcut (Shift+Alt+F) — triggers the standard Format Document action
   editor.addAction({
     id: 'fhir-format-json',
     label: 'Format JSON',
     keybindings: [monaco.KeyMod.Shift | monaco.KeyMod.Alt | monaco.KeyCode.KeyF],
     run(ed) {
+      ed.getAction('editor.action.formatDocument')?.run()
+    },
+  })
+}
+
+// ─── Formatting Provider ────────────────────────────────────────────
+
+function registerFormattingProvider() {
+  if (formattingDisposable) formattingDisposable.dispose()
+
+  formattingDisposable = monaco.languages.registerDocumentFormattingEditProvider('json', {
+    provideDocumentFormattingEdits(model) {
       try {
-        const text = ed.getValue()
+        const text = model.getValue()
         const parsed = JSON.parse(text)
         const formatted = JSON.stringify(parsed, null, 2)
-        ed.setValue(formatted)
-      } catch { /* ignore invalid JSON */ }
+        return [{
+          range: model.getFullModelRange(),
+          text: formatted,
+        }]
+      } catch {
+        // If JSON is invalid, return no edits
+        return []
+      }
     },
   })
 }
@@ -531,14 +623,11 @@ watch(
   () => props.modelValue,
   (nextValue) => {
     if (!editor) return
-    if (ignoreNextWatch) {
-      ignoreNextWatch = false
-      return
-    }
-    const current = editor.getValue()
-    if (current === nextValue) return
+    // Skip if this is our own emit echoing back through the parent
+    if (nextValue === lastEmittedValue) return
 
-    // External change (e.g. template switch) — replace content preserving undo stack
+    // External change (e.g. template switch, format button)
+    lastEmittedValue = nextValue
     const model = editor.getModel()
     editor.pushUndoStop()
     editor.executeEdits('external', [{
@@ -566,6 +655,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   if (completionDisposable) completionDisposable.dispose()
   if (hoverDisposable) hoverDisposable.dispose()
+  if (formattingDisposable) formattingDisposable.dispose()
   if (editor) {
     editor.dispose()
     editor = null
