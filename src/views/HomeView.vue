@@ -1664,19 +1664,146 @@ function tryInPlayground(snippet) {
     }
     // If it's an item-level extension snippet (has url but no linkId), wrap in a sample item
     else if (parsed.url && !parsed.linkId) {
+      // Determine the best item type/shape based on the extension
+      const extUrl = parsed.url || ''
+      let sampleItem = {
+        linkId: 'example-item',
+        text: 'Example item',
+        type: 'string',
+        extension: [parsed],
+      }
+
+      // itemControl extension — pick item type based on the control code
+      if (extUrl.includes('questionnaire-itemControl')) {
+        const code = parsed.valueCodeableConcept?.coding?.[0]?.code || ''
+        const choiceControls = ['drop-down', 'radio-button', 'check-box', 'autocomplete']
+        const sliderControls = ['slider']
+        const textControls = ['text-box']
+        if (choiceControls.includes(code)) {
+          sampleItem = {
+            linkId: 'example-item',
+            text: 'Pick a color',
+            type: 'choice',
+            extension: [parsed],
+            answerOption: [
+              { valueCoding: { code: 'red', display: 'Red' } },
+              { valueCoding: { code: 'green', display: 'Green' } },
+              { valueCoding: { code: 'blue', display: 'Blue' } },
+            ],
+          }
+        } else if (sliderControls.includes(code)) {
+          sampleItem = {
+            linkId: 'example-item',
+            text: 'Select a value',
+            type: 'integer',
+            extension: [
+              parsed,
+              { url: 'http://hl7.org/fhir/StructureDefinition/minValue', valueInteger: 0 },
+              { url: 'http://hl7.org/fhir/StructureDefinition/maxValue', valueInteger: 100 },
+            ],
+          }
+        } else if (textControls.includes(code)) {
+          sampleItem.type = 'text'
+          sampleItem.text = 'Enter multi-line text'
+        } else if (['page', 'tab-container'].includes(code)) {
+          sampleItem = {
+            linkId: 'example-group',
+            text: 'Section',
+            type: 'group',
+            extension: [parsed],
+            item: [
+              { linkId: 'q1', text: 'Question 1', type: 'string' },
+              { linkId: 'q2', text: 'Question 2', type: 'string' },
+            ],
+          }
+        }
+      }
+      // choiceOrientation — needs a choice item
+      else if (extUrl.includes('choiceOrientation')) {
+        sampleItem = {
+          linkId: 'example-item',
+          text: 'Pick an option',
+          type: 'choice',
+          extension: [
+            parsed,
+            {
+              url: 'http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl',
+              valueCodeableConcept: { coding: [{ system: 'http://hl7.org/fhir/questionnaire-item-control', code: 'radio-button' }] }
+            }
+          ],
+          answerOption: [
+            { valueCoding: { code: 'a', display: 'Option A' } },
+            { valueCoding: { code: 'b', display: 'Option B' } },
+            { valueCoding: { code: 'c', display: 'Option C' } },
+          ],
+        }
+      }
+      // sliderStepValue — needs an integer item with slider
+      else if (extUrl.includes('sliderStepValue')) {
+        sampleItem = {
+          linkId: 'example-item',
+          text: 'Select a value (step = ' + (parsed.valueInteger || 5) + ')',
+          type: 'integer',
+          extension: [
+            { url: 'http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl', valueCodeableConcept: { coding: [{ system: 'http://hl7.org/fhir/questionnaire-item-control', code: 'slider' }] } },
+            parsed,
+            { url: 'http://hl7.org/fhir/StructureDefinition/minValue', valueInteger: 0 },
+            { url: 'http://hl7.org/fhir/StructureDefinition/maxValue', valueInteger: 100 },
+          ],
+        }
+      }
+      // collapsible — needs a group item
+      else if (extUrl.includes('collapsible')) {
+        sampleItem = {
+          linkId: 'example-group',
+          text: 'Collapsible Section',
+          type: 'group',
+          extension: [parsed],
+          item: [
+            { linkId: 'q1', text: 'First question', type: 'string' },
+            { linkId: 'q2', text: 'Second question', type: 'integer' },
+          ],
+        }
+      }
+      // displayCategory — needs a display item
+      else if (extUrl.includes('displayCategory')) {
+        const catCode = parsed.valueCodeableConcept?.coding?.[0]?.code || 'instructions'
+        sampleItem = {
+          linkId: 'example-display',
+          text: catCode === 'security' ? '🔒 This form contains sensitive data.' : 'ℹ️ Please fill in all required fields below.',
+          type: 'display',
+          extension: [parsed],
+        }
+      }
+      // entryFormat — use as placeholder
+      else if (extUrl.includes('entryFormat')) {
+        sampleItem.text = 'Date of birth'
+        sampleItem.type = 'string'
+      }
+      // hidden — add a visible note + the hidden item
+      else if (extUrl.includes('questionnaire-hidden')) {
+        const wrapped = {
+          resourceType: 'Questionnaire',
+          id: 'playground-example',
+          status: 'active',
+          title: 'Playground Example',
+          item: [
+            { linkId: 'visible-note', text: 'The next item is hidden (check the JSON to see it)', type: 'display' },
+            { linkId: 'hidden-item', text: 'I am hidden', type: 'string', extension: [parsed] },
+          ],
+        }
+        pgJson.value = JSON.stringify(wrapped, null, 2)
+        pgSelectedTemplate.value = 'blank'
+        activeTab.value = 'playground'
+        return
+      }
+
       const wrapped = {
         resourceType: 'Questionnaire',
         id: 'playground-example',
         status: 'active',
         title: 'Playground Example',
-        item: [
-          {
-            linkId: 'example-item',
-            text: 'Example item',
-            type: 'string',
-            extension: [parsed],
-          },
-        ],
+        item: [sampleItem],
       }
       pgJson.value = JSON.stringify(wrapped, null, 2)
     }

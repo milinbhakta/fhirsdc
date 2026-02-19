@@ -16,6 +16,7 @@ const emit = defineEmits(['response-updated'])
 const answers = reactive({})
 const touched = reactive({})
 const validationErrors = reactive({})
+const collapsedGroups = reactive({})
 
 // ── ValueSet Expansion ──────────────────────────────────────────────
 const expandedOptions = reactive({})   // { [linkId]: answerOption[] }
@@ -82,6 +83,8 @@ const flatQuestions = computed(() => {
       const currentPath = [...path, item.linkId]
 
       if (item.type === 'group') {
+        // Include the group itself so we can render collapsible/table headers
+        out.push({ ...item, path: currentPath })
         walk(item.item ?? [], currentPath)
         return
       }
@@ -109,7 +112,7 @@ const responseFromAnswers = computed(() => {
   }
 })
 
-const visibleQuestions = computed(() => flatQuestions.value.filter((item) => isItemEnabled(item)))
+const visibleQuestions = computed(() => flatQuestions.value.filter((item) => isItemEnabled(item) && !isHidden(item)))
 
 function buildResponseItems(itemList = [], respectEnableWhen = true) {
   return itemList
@@ -275,6 +278,18 @@ function applyInitialValues() {
       answers[item.linkId] = initialValue
     }
   })
+
+  // Initialize collapsed state for collapsible groups
+  flatQuestions.value.forEach((item) => {
+    if (item.type === 'group') {
+      const collapsible = getCollapsible(item)
+      if (collapsible === 'default-closed') {
+        collapsedGroups[item.linkId] = true
+      } else if (collapsible === 'default-open') {
+        collapsedGroups[item.linkId] = false
+      }
+    }
+  })
 }
 
 function getCalculatedExpression(item) {
@@ -362,6 +377,71 @@ function clearDisabledAnswers() {
   })
 
   return changed
+}
+
+// ── Rendering Extension Helpers ──────────────────────────────────────
+function getExtValue(item, url) {
+  return item?.extension?.find((e) => e.url === url)
+}
+
+function getRenderingStyle(item) {
+  const ext = getExtValue(item, 'http://hl7.org/fhir/StructureDefinition/rendering-style')
+  return ext?.valueString || ''
+}
+
+function getRenderingXhtml(item) {
+  const ext = getExtValue(item, 'http://hl7.org/fhir/StructureDefinition/rendering-xhtml')
+  return ext?.valueString || ''
+}
+
+function getEntryFormat(item) {
+  const ext = getExtValue(item, 'http://hl7.org/fhir/StructureDefinition/entryFormat')
+  return ext?.valueString || ''
+}
+
+function isHidden(item) {
+  const ext = getExtValue(item, 'http://hl7.org/fhir/StructureDefinition/questionnaire-hidden')
+  return ext?.valueBoolean === true
+}
+
+function getItemControl(item) {
+  const ext = getExtValue(item, 'http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl')
+  return ext?.valueCodeableConcept?.coding?.[0]?.code || ''
+}
+
+function getChoiceOrientation(item) {
+  const ext = getExtValue(item, 'http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation')
+  return ext?.valueCode || ''
+}
+
+function getSliderStepValue(item) {
+  const ext = getExtValue(item, 'http://hl7.org/fhir/StructureDefinition/questionnaire-sliderStepValue')
+  return ext?.valueInteger ?? 1
+}
+
+function getDisplayCategory(item) {
+  const ext = getExtValue(item, 'http://hl7.org/fhir/StructureDefinition/questionnaire-displayCategory')
+  return ext?.valueCodeableConcept?.coding?.[0]?.code || ''
+}
+
+function getShortText(item) {
+  const ext = getExtValue(item, 'http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-shortText')
+  return ext?.valueString || ''
+}
+
+function getCollapsible(item) {
+  const ext = getExtValue(item, 'http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-collapsible')
+  return ext?.valueCode || ''
+}
+
+function getMinValue(item) {
+  const ext = getExtValue(item, 'http://hl7.org/fhir/StructureDefinition/minValue')
+  return ext?.valueInteger ?? ext?.valueDecimal ?? null
+}
+
+function getMaxValue(item) {
+  const ext = getExtValue(item, 'http://hl7.org/fhir/StructureDefinition/maxValue')
+  return ext?.valueInteger ?? ext?.valueDecimal ?? null
 }
 
 function getConstraints(item) {
@@ -461,6 +541,23 @@ function onBlur(item) {
   }
 }
 
+function toggleCollapsed(linkId) {
+  collapsedGroups[linkId] = !collapsedGroups[linkId]
+}
+
+function onCheckboxChange(item, value, checked) {
+  const current = Array.isArray(answers[item.linkId]) ? [...answers[item.linkId]] : []
+  if (checked) {
+    current.push(value)
+  } else {
+    const idx = current.indexOf(value)
+    if (idx >= 0) current.splice(idx, 1)
+  }
+  touched[item.linkId] = true
+  answers[item.linkId] = current
+  refreshStateAndEmit()
+}
+
 watch(
   () => props.questionnaire,
   () => {
@@ -472,6 +569,9 @@ watch(
     })
     Object.keys(validationErrors).forEach((key) => {
       delete validationErrors[key]
+    })
+    Object.keys(collapsedGroups).forEach((key) => {
+      delete collapsedGroups[key]
     })
     applyInitialValues()
     refreshStateAndEmit()
@@ -493,82 +593,175 @@ onMounted(() => {
       Questionnaire has no renderable questions.
     </div>
 
-    <div v-for="item in visibleQuestions" :key="item.linkId" class="question-row">
-      <label class="question-label" :for="item.linkId">
-        {{ item.text || item.linkId }}
-        <span v-if="item.required" class="required-pill">required</span>
-        <span v-if="item.enableWhen?.length" class="logic-pill">enableWhen</span>
-        <span v-if="isCalculated(item)" class="logic-pill">calculatedExpression</span>
-        <span v-if="hasConstraints(item)" class="logic-pill constraint-pill">constraint</span>
-      </label>
+    <template v-for="item in visibleQuestions" :key="item.linkId">
+      <!-- GROUP items: render as section header, optionally collapsible -->
+      <div v-if="item.type === 'group'" class="group-row" :class="{ 'group-collapsible': getCollapsible(item) }">
+        <div
+          class="group-header"
+          :style="getRenderingStyle(item)"
+          :class="{ 'group-header--clickable': getCollapsible(item) }"
+          @click="getCollapsible(item) ? toggleCollapsed(item.linkId) : null"
+        >
+          <span v-if="getCollapsible(item)" class="collapse-chevron" :class="{ open: !collapsedGroups[item.linkId] }">▶</span>
+          <span v-if="getRenderingXhtml(item)" v-html="getRenderingXhtml(item)"></span>
+          <span v-else>{{ item.text || item.linkId }}</span>
+        </div>
+      </div>
 
-      <textarea
-        v-if="item.type === 'text'"
-        :id="item.linkId"
-        rows="3"
-        class="question-input"
-        :class="{ 'question-input--invalid': validationErrors[item.linkId]?.length }"
-        :value="answers[item.linkId] || ''"
-        :disabled="isCalculated(item)"
-        @input="onInput(item, $event.target.value)"
-        @blur="onBlur(item)"
-      />
+      <!-- DISPLAY items: read-only text -->
+      <div v-else-if="item.type === 'display'" class="display-row" :class="getDisplayCategory(item) ? `display-${getDisplayCategory(item)}` : ''">
+        <div :style="getRenderingStyle(item)">
+          <span v-if="getRenderingXhtml(item)" v-html="getRenderingXhtml(item)"></span>
+          <span v-else>{{ item.text || '' }}</span>
+        </div>
+      </div>
 
-      <div v-else-if="item.type === 'choice'" style="position: relative;">
-        <select
+      <!-- QUESTION items -->
+      <div v-else class="question-row">
+        <label class="question-label" :for="item.linkId">
+          <span v-if="getRenderingXhtml(item)" v-html="getRenderingXhtml(item)" :style="getRenderingStyle(item)"></span>
+          <span v-else :style="getRenderingStyle(item)">{{ getShortText(item) || item.text || item.linkId }}</span>
+          <span v-if="item.required" class="required-pill">required</span>
+          <span v-if="item.enableWhen?.length" class="logic-pill">enableWhen</span>
+          <span v-if="isCalculated(item)" class="logic-pill">calculatedExpression</span>
+          <span v-if="hasConstraints(item)" class="logic-pill constraint-pill">constraint</span>
+        </label>
+
+        <!-- TEXT (multi-line) -->
+        <textarea
+          v-if="item.type === 'text' || getItemControl(item) === 'text-box'"
           :id="item.linkId"
+          rows="3"
           class="question-input"
           :class="{ 'question-input--invalid': validationErrors[item.linkId]?.length }"
           :value="answers[item.linkId] || ''"
-          :disabled="isCalculated(item) || expandingVS[item.linkId]"
+          :placeholder="getEntryFormat(item)"
+          :disabled="isCalculated(item) || item.readOnly"
+          @input="onInput(item, $event.target.value)"
+          @blur="onBlur(item)"
+        />
+
+        <!-- CHOICE: radio-button itemControl -->
+        <div v-else-if="(item.type === 'choice' || item.type === 'open-choice') && getItemControl(item) === 'radio-button'"
+          class="choice-group"
+          :class="{ 'choice-horizontal': getChoiceOrientation(item) === 'horizontal' }"
+        >
+          <label
+            v-for="(option, index) in getEffectiveOptions(item)"
+            :key="`${item.linkId}-radio-${index}`"
+            class="radio-label"
+          >
+            <input
+              type="radio"
+              :name="item.linkId"
+              :value="getOptionValue(option)"
+              :checked="answers[item.linkId] === getOptionValue(option)"
+              :disabled="isCalculated(item) || item.readOnly"
+              @change="onInput(item, $event.target.value)"
+            />
+            {{ getOptionLabel(option) }}
+          </label>
+        </div>
+
+        <!-- CHOICE: check-box itemControl -->
+        <div v-else-if="(item.type === 'choice' || item.type === 'open-choice') && getItemControl(item) === 'check-box'"
+          class="choice-group"
+          :class="{ 'choice-horizontal': getChoiceOrientation(item) === 'horizontal' }"
+        >
+          <label
+            v-for="(option, index) in getEffectiveOptions(item)"
+            :key="`${item.linkId}-cb-${index}`"
+            class="radio-label"
+          >
+            <input
+              type="checkbox"
+              :value="getOptionValue(option)"
+              :checked="(answers[item.linkId] || []).includes?.(getOptionValue(option))"
+              :disabled="isCalculated(item) || item.readOnly"
+              @change="onCheckboxChange(item, getOptionValue(option), $event.target.checked)"
+            />
+            {{ getOptionLabel(option) }}
+          </label>
+        </div>
+
+        <!-- CHOICE: default drop-down / autocomplete -->
+        <div v-else-if="item.type === 'choice' || item.type === 'open-choice'" style="position: relative;">
+          <select
+            :id="item.linkId"
+            class="question-input"
+            :class="{ 'question-input--invalid': validationErrors[item.linkId]?.length }"
+            :value="answers[item.linkId] || ''"
+            :disabled="isCalculated(item) || expandingVS[item.linkId] || item.readOnly"
+            @change="onInput(item, $event.target.value)"
+            @blur="onBlur(item)"
+          >
+            <option value="">{{ expandingVS[item.linkId] ? 'Loading options…' : 'Select option' }}</option>
+            <option
+              v-for="(option, index) in getEffectiveOptions(item)"
+              :key="`${item.linkId}-opt-${index}`"
+              :value="getOptionValue(option)"
+            >
+              {{ getOptionLabel(option) }}
+            </option>
+          </select>
+          <span v-if="expandErrors[item.linkId]" style="font-size: 0.75rem; color: #b45309; margin-top: 0.2rem; display: block;">
+            ⚠️ Could not load options: {{ expandErrors[item.linkId] }}
+          </span>
+        </div>
+
+        <!-- BOOLEAN -->
+        <input
+          v-else-if="item.type === 'boolean'"
+          :id="item.linkId"
+          type="checkbox"
+          class="question-checkbox"
+          :checked="Boolean(answers[item.linkId])"
+          :disabled="isCalculated(item) || item.readOnly"
+          @change="onInput(item, $event.target.checked)"
+          @blur="onBlur(item)"
+        />
+
+        <!-- SLIDER (integer/decimal with slider itemControl) -->
+        <div v-else-if="getItemControl(item) === 'slider'" class="slider-row">
+          <input
+            :id="item.linkId"
+            type="range"
+            class="slider-input"
+            :min="getMinValue(item) ?? 0"
+            :max="getMaxValue(item) ?? 100"
+            :step="getSliderStepValue(item)"
+            :value="answers[item.linkId] || getMinValue(item) || 0"
+            :disabled="isCalculated(item) || item.readOnly"
+            @input="onInput(item, Number($event.target.value))"
+          />
+          <span class="slider-value">{{ answers[item.linkId] ?? getMinValue(item) ?? 0 }}</span>
+        </div>
+
+        <!-- DEFAULT: string, integer, decimal, date, etc. -->
+        <input
+          v-else
+          :id="item.linkId"
+          :type="item.type === 'integer' || item.type === 'decimal' ? 'number' : item.type === 'date' ? 'date' : item.type === 'dateTime' ? 'datetime-local' : item.type === 'time' ? 'time' : item.type === 'url' ? 'url' : 'text'"
+          :step="item.type === 'decimal' ? '0.01' : undefined"
+          :min="getMinValue(item) ?? undefined"
+          :max="getMaxValue(item) ?? undefined"
+          :placeholder="getEntryFormat(item)"
+          class="question-input"
+          :class="{ 'question-input--invalid': validationErrors[item.linkId]?.length }"
+          :value="answers[item.linkId] || ''"
+          :disabled="isCalculated(item) || item.readOnly"
+          @input="onInput(item, $event.target.value)"
           @change="onInput(item, $event.target.value)"
           @blur="onBlur(item)"
-        >
-          <option value="">{{ expandingVS[item.linkId] ? 'Loading options…' : 'Select option' }}</option>
-          <option
-            v-for="(option, index) in getEffectiveOptions(item)"
-            :key="`${item.linkId}-opt-${index}`"
-            :value="getOptionValue(option)"
-          >
-            {{ getOptionLabel(option) }}
-          </option>
-        </select>
-        <span v-if="expandErrors[item.linkId]" style="font-size: 0.75rem; color: #b45309; margin-top: 0.2rem; display: block;">
-          ⚠️ Could not load options: {{ expandErrors[item.linkId] }}
-        </span>
-      </div>
+        />
 
-      <input
-        v-else-if="item.type === 'boolean'"
-        :id="item.linkId"
-        type="checkbox"
-        class="question-checkbox"
-        :checked="Boolean(answers[item.linkId])"
-        :disabled="isCalculated(item)"
-        @change="onInput(item, $event.target.checked)"
-        @blur="onBlur(item)"
-      />
-
-      <input
-        v-else
-        :id="item.linkId"
-        :type="item.type === 'integer' || item.type === 'decimal' ? 'number' : item.type === 'date' ? 'date' : 'text'"
-        :step="item.type === 'decimal' ? '0.01' : undefined"
-        class="question-input"
-        :class="{ 'question-input--invalid': validationErrors[item.linkId]?.length }"
-        :value="answers[item.linkId] || ''"
-        :disabled="isCalculated(item)"
-        @input="onInput(item, $event.target.value)"
-        @change="onInput(item, $event.target.value)"
-        @blur="onBlur(item)"
-      />
-
-      <div v-if="validationErrors[item.linkId]?.length" class="validation-errors">
-        <div v-for="(msg, msgIdx) in validationErrors[item.linkId]" :key="msgIdx" class="validation-msg">
-          {{ msg }}
+        <div v-if="validationErrors[item.linkId]?.length" class="validation-errors">
+          <div v-for="(msg, msgIdx) in validationErrors[item.linkId]" :key="msgIdx" class="validation-msg">
+            {{ msg }}
+          </div>
         </div>
       </div>
-    </div>
+    </template>
   </div>
 </template>
 
@@ -588,6 +781,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  flex-wrap: wrap;
 }
 
 .required-pill {
@@ -651,5 +845,112 @@ onMounted(() => {
 .constraint-pill {
   border-color: #e87040 !important;
   color: #e87040;
+}
+
+/* ── Group & Display ── */
+.group-row {
+  margin-top: 0.5rem;
+}
+
+.group-header {
+  font-weight: 700;
+  font-size: 1.05rem;
+  padding: 0.4rem 0;
+  border-bottom: 2px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.group-header--clickable {
+  cursor: pointer;
+  user-select: none;
+}
+
+.collapse-chevron {
+  font-size: 0.7rem;
+  transition: transform 0.2s;
+  display: inline-block;
+}
+
+.collapse-chevron.open {
+  transform: rotate(90deg);
+}
+
+.display-row {
+  padding: 0.5rem 0;
+  color: var(--color-text-soft);
+  font-size: 0.9rem;
+}
+
+.display-instructions {
+  padding: 0.6rem 0.8rem;
+  background: #eff6ff;
+  border-left: 3px solid #3b82f6;
+  border-radius: 4px;
+  color: #1e40af;
+  font-size: 0.85rem;
+}
+
+.display-security {
+  padding: 0.6rem 0.8rem;
+  background: #fef3c7;
+  border-left: 3px solid #f59e0b;
+  border-radius: 4px;
+  color: #92400e;
+  font-size: 0.85rem;
+}
+
+/* ── Choice Groups (radio/checkbox) ── */
+.choice-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.choice-horizontal {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.radio-label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-weight: 400;
+  cursor: pointer;
+  padding: 0.25rem 0;
+}
+
+.radio-label input[type="radio"],
+.radio-label input[type="checkbox"] {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+}
+
+/* ── Slider ── */
+.slider-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.slider-input {
+  flex: 1;
+  height: 6px;
+  appearance: auto;
+  cursor: pointer;
+}
+
+.slider-value {
+  font-weight: 600;
+  font-size: 0.9rem;
+  min-width: 2.5rem;
+  text-align: center;
+  background: var(--color-background-mute);
+  border-radius: 6px;
+  padding: 0.2rem 0.5rem;
 }
 </style>
