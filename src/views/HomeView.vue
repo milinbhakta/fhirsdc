@@ -1203,14 +1203,61 @@ function goToStep(tabId) {
   activeTab.value = tabId
 }
 
+function isJsonSnippet(snippet) {
+  // Returns true if the snippet looks like JSON (starts with { or [)
+  return /^\s*[\[{]/.test(snippet)
+}
+
 function tryInPlayground(snippet) {
   // Load a JSON snippet into the playground and navigate there
+  if (!isJsonSnippet(snippet)) {
+    // Non-JSON snippets (HTTP requests, etc.) — show as-is but can't render form
+    pgJson.value = snippet
+    pgSelectedTemplate.value = 'blank'
+    activeTab.value = 'playground'
+    return
+  }
+
   try {
     const parsed = JSON.parse(snippet)
-    pgJson.value = JSON.stringify(parsed, null, 2)
+
+    // If it's already a full Questionnaire resource, use as-is
+    if (parsed.resourceType === 'Questionnaire') {
+      pgJson.value = JSON.stringify(parsed, null, 2)
+    }
+    // If it's a Questionnaire item fragment (has linkId), wrap in a Questionnaire envelope
+    else if (parsed.linkId) {
+      const wrapped = {
+        resourceType: 'Questionnaire',
+        id: 'playground-example',
+        status: 'active',
+        title: parsed.text || 'Playground Example',
+        item: [parsed],
+      }
+      pgJson.value = JSON.stringify(wrapped, null, 2)
+    }
+    // If it's a Questionnaire-level extension (e.g. launchContext), wrap with the extension
+    else if (parsed.url && parsed.extension) {
+      const wrapped = {
+        resourceType: 'Questionnaire',
+        id: 'playground-example',
+        status: 'active',
+        title: 'Playground Example',
+        extension: [parsed],
+        item: [
+          { linkId: 'example-item', text: 'Example item', type: 'string' },
+        ],
+      }
+      pgJson.value = JSON.stringify(wrapped, null, 2)
+    }
+    // Any other valid JSON (e.g. QuestionnaireResponse, Parameters) — load as-is
+    else {
+      pgJson.value = JSON.stringify(parsed, null, 2)
+    }
   } catch {
     pgJson.value = snippet
   }
+
   pgSelectedTemplate.value = 'blank'
   activeTab.value = 'playground'
 }
