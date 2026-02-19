@@ -1,106 +1,292 @@
-const vitalsQuestionnaire = {
+// ══════════════════════════════════════════════════════════════════════
+// Scenario 1 — Patient Registration
+// ══════════════════════════════════════════════════════════════════════
+
+const patientRegQuestionnaire = {
   resourceType: 'Questionnaire',
-  id: 'vitals-intake',
-  url: 'http://example.org/fhir/Questionnaire/vitals-intake',
+  id: 'patient-registration',
+  url: 'http://example.org/fhir/Questionnaire/patient-registration',
   version: '1.0.0',
-  name: 'VitalsIntakeQuestionnaire',
-  title: 'Vitals Intake',
+  name: 'PatientRegistrationQuestionnaire',
+  title: 'Patient Registration',
   status: 'active',
   subjectType: ['Patient'],
   date: '2026-02-18',
   item: [
     {
-      linkId: 'demographics',
-      text: 'Demographics',
+      linkId: 'personal',
+      text: 'Personal Information',
       type: 'group',
       item: [
+        { linkId: 'family-name', text: 'Family Name', type: 'string', required: true },
+        { linkId: 'given-name', text: 'Given Name', type: 'string', required: true },
+        { linkId: 'dob', text: 'Date of Birth', type: 'date', required: true },
         {
-          linkId: 'first-name',
-          text: 'First Name',
+          linkId: 'gender',
+          text: 'Gender',
+          type: 'choice',
+          required: true,
+          answerValueSet: 'http://hl7.org/fhir/ValueSet/administrative-gender',
+        },
+        {
+          linkId: 'marital-status',
+          text: 'Marital Status',
+          type: 'choice',
+          answerValueSet: 'http://hl7.org/fhir/ValueSet/marital-status',
+        },
+      ],
+    },
+    {
+      linkId: 'contact',
+      text: 'Contact Details',
+      type: 'group',
+      item: [
+        { linkId: 'phone', text: 'Phone Number', type: 'string', required: true },
+        { linkId: 'email', text: 'Email', type: 'string' },
+        { linkId: 'address-line', text: 'Street Address', type: 'string' },
+        { linkId: 'city', text: 'City', type: 'string' },
+        { linkId: 'state', text: 'State / Province', type: 'string' },
+        { linkId: 'postal-code', text: 'Postal Code', type: 'string' },
+      ],
+    },
+    {
+      linkId: 'emergency',
+      text: 'Emergency Contact',
+      type: 'group',
+      item: [
+        { linkId: 'ec-name', text: 'Contact Name', type: 'string', required: true },
+        {
+          linkId: 'ec-relationship',
+          text: 'Relationship',
+          type: 'choice',
+          answerOption: [
+            { valueCoding: { code: 'spouse', display: 'Spouse' } },
+            { valueCoding: { code: 'parent', display: 'Parent' } },
+            { valueCoding: { code: 'sibling', display: 'Sibling' } },
+            { valueCoding: { code: 'friend', display: 'Friend' } },
+            { valueCoding: { code: 'other', display: 'Other' } },
+          ],
+        },
+        { linkId: 'ec-phone', text: 'Contact Phone', type: 'string', required: true },
+      ],
+    },
+    {
+      linkId: 'insurance',
+      text: 'Insurance',
+      type: 'group',
+      item: [
+        { linkId: 'has-insurance', text: 'Has insurance coverage?', type: 'boolean' },
+        {
+          linkId: 'insurance-provider',
+          text: 'Insurance Provider',
           type: 'string',
-          required: true,
+          enableWhen: [{ question: 'has-insurance', operator: '=', answerBoolean: true }],
         },
         {
-          linkId: 'dob',
-          text: 'Date of Birth',
-          type: 'date',
-          required: true,
+          linkId: 'member-id',
+          text: 'Member ID',
+          type: 'string',
+          enableWhen: [{ question: 'has-insurance', operator: '=', answerBoolean: true }],
         },
       ],
     },
+  ],
+}
+
+const patientRegQuestionnaireResponse = {
+  resourceType: 'QuestionnaireResponse',
+  id: 'patient-registration-response',
+  questionnaire: 'http://example.org/fhir/Questionnaire/patient-registration',
+  status: 'completed',
+  authored: '2026-02-18T09:00:00Z',
+  item: [
     {
-      linkId: 'vitals',
-      text: 'Vitals',
+      linkId: 'personal',
+      item: [
+        { linkId: 'family-name', answer: [{ valueString: 'Sharma' }] },
+        { linkId: 'given-name', answer: [{ valueString: 'Aarav' }] },
+        { linkId: 'dob', answer: [{ valueDate: '1990-07-03' }] },
+        { linkId: 'gender', answer: [{ valueCoding: { system: 'http://hl7.org/fhir/administrative-gender', code: 'male', display: 'Male' } }] },
+      ],
+    },
+    {
+      linkId: 'contact',
+      item: [
+        { linkId: 'phone', answer: [{ valueString: '+1-555-0199' }] },
+        { linkId: 'email', answer: [{ valueString: 'aarav.sharma@email.com' }] },
+        { linkId: 'city', answer: [{ valueString: 'Austin' }] },
+        { linkId: 'state', answer: [{ valueString: 'TX' }] },
+        { linkId: 'postal-code', answer: [{ valueString: '73301' }] },
+      ],
+    },
+    {
+      linkId: 'emergency',
+      item: [
+        { linkId: 'ec-name', answer: [{ valueString: 'Priya Sharma' }] },
+        { linkId: 'ec-relationship', answer: [{ valueCoding: { code: 'spouse', display: 'Spouse' } }] },
+        { linkId: 'ec-phone', answer: [{ valueString: '+1-555-0200' }] },
+      ],
+    },
+    {
+      linkId: 'insurance',
+      item: [
+        { linkId: 'has-insurance', answer: [{ valueBoolean: true }] },
+        { linkId: 'insurance-provider', answer: [{ valueString: 'Blue Cross Blue Shield' }] },
+        { linkId: 'member-id', answer: [{ valueString: 'BCBS-88234' }] },
+      ],
+    },
+  ],
+}
+
+const patientRegFhirPathExamples = [
+  { label: 'Get patient full name', expression: "item.where(linkId='personal').item.where(linkId='given-name').answer.valueString.first() + ' ' + item.where(linkId='personal').item.where(linkId='family-name').answer.valueString.first()" },
+  { label: 'Get all required field linkIds', expression: 'item.descendants().where(required=true).linkId' },
+  { label: 'Check if patient has insurance', expression: "item.where(linkId='insurance').item.where(linkId='has-insurance').answer.valueBoolean.first()" },
+  { label: 'Get phone number', expression: "item.where(linkId='contact').item.where(linkId='phone').answer.valueString.first()" },
+  { label: 'Get gender code', expression: "item.where(linkId='personal').item.where(linkId='gender').answer.valueCoding.code.first()" },
+  { label: 'Count answered questions', expression: 'item.descendants().answer.count()' },
+]
+
+const patientRegExtractionMappingExamples = [
+  { name: 'Patient family name', fhirPath: "item.where(linkId='personal').item.where(linkId='family-name').answer.valueString.first()", target: 'Patient.name[0].family' },
+  { name: 'Patient given name', fhirPath: "item.where(linkId='personal').item.where(linkId='given-name').answer.valueString.first()", target: 'Patient.name[0].given[0]' },
+  { name: 'Patient birth date', fhirPath: "item.where(linkId='personal').item.where(linkId='dob').answer.valueDate.first()", target: 'Patient.birthDate' },
+  { name: 'Patient gender', fhirPath: "item.where(linkId='personal').item.where(linkId='gender').answer.valueCoding.code.first()", target: 'Patient.gender' },
+  { name: 'Patient phone', fhirPath: "item.where(linkId='contact').item.where(linkId='phone').answer.valueString.first()", target: 'Patient.telecom[0].value' },
+  { name: 'Emergency contact name', fhirPath: "item.where(linkId='emergency').item.where(linkId='ec-name').answer.valueString.first()", target: 'Patient.contact[0].name.text' },
+]
+
+// ══════════════════════════════════════════════════════════════════════
+// Scenario 2 — Allergy / Condition Recording
+// ══════════════════════════════════════════════════════════════════════
+
+const allergyConditionQuestionnaire = {
+  resourceType: 'Questionnaire',
+  id: 'allergy-condition-recording',
+  url: 'http://example.org/fhir/Questionnaire/allergy-condition-recording',
+  version: '1.0.0',
+  name: 'AllergyConditionRecordingQuestionnaire',
+  title: 'Allergy & Condition Recording',
+  status: 'active',
+  subjectType: ['Patient'],
+  date: '2026-02-18',
+  item: [
+    {
+      linkId: 'patient-info',
+      text: 'Patient',
       type: 'group',
       item: [
+        { linkId: 'patient-name', text: 'Patient Name', type: 'string', required: true },
+        { linkId: 'mrn', text: 'Medical Record Number (MRN)', type: 'string', required: true },
+      ],
+    },
+    {
+      linkId: 'allergy-section',
+      text: 'Allergy Information',
+      type: 'group',
+      item: [
+        { linkId: 'has-allergy', text: 'Does the patient have any known allergies?', type: 'boolean' },
         {
-          linkId: 'height',
-          text: 'Height (cm)',
-          type: 'integer',
-          required: true,
-        },
-        {
-          linkId: 'weight',
-          text: 'Weight (kg)',
-          type: 'integer',
-          required: true,
-        },
-        {
-          linkId: 'smoker',
-          text: 'Current smoker?',
-          type: 'boolean',
-        },
-        {
-          linkId: 'smoker-amount',
-          text: 'Cigarettes per day',
-          type: 'integer',
-          enableWhen: [
+          linkId: 'allergy-detail',
+          text: 'Allergy Details',
+          type: 'group',
+          enableWhen: [{ question: 'has-allergy', operator: '=', answerBoolean: true }],
+          item: [
             {
-              question: 'smoker',
-              operator: '=',
-              answerBoolean: true,
+              linkId: 'allergy-type',
+              text: 'Allergy Category',
+              type: 'choice',
+              required: true,
+              answerOption: [
+                { valueCoding: { system: 'http://hl7.org/fhir/allergy-intolerance-category', code: 'food', display: 'Food' } },
+                { valueCoding: { system: 'http://hl7.org/fhir/allergy-intolerance-category', code: 'medication', display: 'Medication' } },
+                { valueCoding: { system: 'http://hl7.org/fhir/allergy-intolerance-category', code: 'environment', display: 'Environment' } },
+                { valueCoding: { system: 'http://hl7.org/fhir/allergy-intolerance-category', code: 'biologic', display: 'Biologic' } },
+              ],
             },
-          ],
-        },
-        {
-          linkId: 'bmi',
-          text: 'Calculated BMI',
-          type: 'decimal',
-          readOnly: true,
-          extension: [
+            { linkId: 'allergy-substance', text: 'Substance / Agent', type: 'string', required: true },
             {
-              url: 'http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-calculatedExpression',
-              valueExpression: {
-                language: 'text/fhirpath',
-                expression:
-                  "let h := item.where(linkId='vitals').item.where(linkId='height').answer.valueInteger.first(); let w := item.where(linkId='vitals').item.where(linkId='weight').answer.valueInteger.first(); iif(h.exists() and w.exists(), w / ((h / 100) * (h / 100)), {})",
-              },
+              linkId: 'allergy-criticality',
+              text: 'Criticality',
+              type: 'choice',
+              answerValueSet: 'http://hl7.org/fhir/ValueSet/allergy-intolerance-criticality',
             },
+            {
+              linkId: 'reaction-severity',
+              text: 'Reaction Severity',
+              type: 'choice',
+              answerOption: [
+                { valueCoding: { code: 'mild', display: 'Mild' } },
+                { valueCoding: { code: 'moderate', display: 'Moderate' } },
+                { valueCoding: { code: 'severe', display: 'Severe' } },
+              ],
+            },
+            { linkId: 'reaction-description', text: 'Reaction Description', type: 'text' },
+            { linkId: 'allergy-onset', text: 'Onset Date', type: 'date' },
           ],
         },
       ],
     },
     {
-      linkId: 'pain',
-      text: 'Pain severity',
-      type: 'choice',
-      answerOption: [
-        { valueCoding: { code: 'none', display: 'No pain' } },
-        { valueCoding: { code: 'mild', display: 'Mild' } },
-        { valueCoding: { code: 'moderate', display: 'Moderate' } },
-        { valueCoding: { code: 'severe', display: 'Severe' } },
+      linkId: 'condition-section',
+      text: 'Condition / Problem',
+      type: 'group',
+      item: [
+        { linkId: 'has-condition', text: 'Record a new condition?', type: 'boolean' },
+        {
+          linkId: 'condition-detail',
+          text: 'Condition Details',
+          type: 'group',
+          enableWhen: [{ question: 'has-condition', operator: '=', answerBoolean: true }],
+          item: [
+            { linkId: 'condition-name', text: 'Condition Name', type: 'string', required: true },
+            {
+              linkId: 'condition-clinical-status',
+              text: 'Clinical Status',
+              type: 'choice',
+              required: true,
+              answerOption: [
+                { valueCoding: { system: 'http://terminology.hl7.org/CodeSystem/condition-clinical', code: 'active', display: 'Active' } },
+                { valueCoding: { system: 'http://terminology.hl7.org/CodeSystem/condition-clinical', code: 'recurrence', display: 'Recurrence' } },
+                { valueCoding: { system: 'http://terminology.hl7.org/CodeSystem/condition-clinical', code: 'relapse', display: 'Relapse' } },
+                { valueCoding: { system: 'http://terminology.hl7.org/CodeSystem/condition-clinical', code: 'inactive', display: 'Inactive' } },
+                { valueCoding: { system: 'http://terminology.hl7.org/CodeSystem/condition-clinical', code: 'resolved', display: 'Resolved' } },
+              ],
+            },
+            {
+              linkId: 'condition-severity',
+              text: 'Severity',
+              type: 'choice',
+              answerOption: [
+                { valueCoding: { system: 'http://snomed.info/sct', code: '255604002', display: 'Mild' } },
+                { valueCoding: { system: 'http://snomed.info/sct', code: '6736007', display: 'Moderate' } },
+                { valueCoding: { system: 'http://snomed.info/sct', code: '24484000', display: 'Severe' } },
+              ],
+            },
+            { linkId: 'condition-onset', text: 'Onset Date', type: 'date' },
+            { linkId: 'condition-note', text: 'Clinical Notes', type: 'text' },
+          ],
+        },
       ],
     },
     {
-      linkId: 'notes',
-      text: 'Clinical note',
-      type: 'text',
-      enableWhen: [
+      linkId: 'recorded-by',
+      text: 'Recorded By',
+      type: 'string',
+      required: true,
+    },
+    {
+      linkId: 'summary',
+      text: 'Items Recorded (calculated)',
+      type: 'integer',
+      readOnly: true,
+      extension: [
         {
-          question: 'pain',
-          operator: '=',
-          answerCoding: {
-            code: 'severe',
+          url: 'http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-calculatedExpression',
+          valueExpression: {
+            language: 'text/fhirpath',
+            expression:
+              "iif(item.where(linkId='allergy-section').item.where(linkId='has-allergy').answer.valueBoolean.first() = true, 1, 0) + iif(item.where(linkId='condition-section').item.where(linkId='has-condition').answer.valueBoolean.first() = true, 1, 0)",
           },
         },
       ],
@@ -108,499 +294,299 @@ const vitalsQuestionnaire = {
   ],
 }
 
-const vitalsQuestionnaireResponse = {
+const allergyConditionQuestionnaireResponse = {
   resourceType: 'QuestionnaireResponse',
-  id: 'vitals-intake-response',
-  questionnaire: 'http://example.org/fhir/Questionnaire/vitals-intake',
+  id: 'allergy-condition-recording-response',
+  questionnaire: 'http://example.org/fhir/Questionnaire/allergy-condition-recording',
   status: 'completed',
-  authored: '2026-02-18T13:20:00Z',
+  authored: '2026-02-18T10:30:00Z',
   item: [
     {
-      linkId: 'demographics',
+      linkId: 'patient-info',
       item: [
-        { linkId: 'first-name', answer: [{ valueString: 'Aarav' }] },
-        { linkId: 'dob', answer: [{ valueDate: '1990-07-03' }] },
+        { linkId: 'patient-name', answer: [{ valueString: 'Nora Patel' }] },
+        { linkId: 'mrn', answer: [{ valueString: 'MRN-00472' }] },
       ],
     },
     {
-      linkId: 'vitals',
+      linkId: 'allergy-section',
       item: [
-        { linkId: 'height', answer: [{ valueInteger: 176 }] },
-        { linkId: 'weight', answer: [{ valueInteger: 72 }] },
-        { linkId: 'smoker', answer: [{ valueBoolean: false }] },
-        { linkId: 'bmi', answer: [{ valueDecimal: 23.24 }] },
-      ],
-    },
-    {
-      linkId: 'pain',
-      answer: [{ valueCoding: { code: 'mild', display: 'Mild' } }],
-    },
-    {
-      linkId: 'notes',
-      answer: [{ valueString: 'Intermittent headache for 2 days' }],
-    },
-  ],
-}
-
-const vitalsFhirPathExamples = [
-  {
-    label: 'Get all top-level question linkIds',
-    expression: 'item.linkId',
-  },
-  {
-    label: 'Get required question linkIds',
-    expression: "item.where(required=true).linkId",
-  },
-  {
-    label: 'Get all response answer values',
-    expression: 'item.descendants().answer.children()',
-  },
-  {
-    label: 'Find pain severity coding display',
-    expression: "item.where(linkId='pain').answer.valueCoding.display",
-  },
-  {
-    label: 'Calculate BMI from response answers',
-    expression:
-      "let h := item.where(linkId='vitals').item.where(linkId='height').answer.valueInteger.first(); let w := item.where(linkId='vitals').item.where(linkId='weight').answer.valueInteger.first(); w / ((h / 100) * (h / 100))",
-  },
-  {
-    label: 'Check if smoker-dependent question should render',
-    expression:
-      "item.where(linkId='vitals').item.where(linkId='smoker').answer.valueBoolean.first() = true",
-  },
-  {
-    label: 'Read SDC calculatedExpression from Questionnaire',
-    expression:
-      "item.where(linkId='vitals').item.where(linkId='bmi').extension.where(url='http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-calculatedExpression').valueExpression.expression",
-  },
-]
-
-const vitalsExtractionMappingExamples = [
-  {
-    name: 'Patient name mapping',
-    fhirPath: "item.where(linkId='demographics').item.where(linkId='first-name').answer.valueString.first()",
-    target: 'Patient.name[0].given[0]',
-  },
-  {
-    name: 'Patient birth date mapping',
-    fhirPath: "item.where(linkId='demographics').item.where(linkId='dob').answer.valueDate.first()",
-    target: 'Patient.birthDate',
-  },
-  {
-    name: 'Body weight mapping',
-    fhirPath: "item.where(linkId='vitals').item.where(linkId='weight').answer.valueInteger.first()",
-    target: 'Observation(code=29463-7).valueQuantity.value',
-  },
-  {
-    name: 'BMI mapping',
-    fhirPath: "item.where(linkId='vitals').item.where(linkId='bmi').answer.valueDecimal.first()",
-    target: 'Observation(code=39156-5).valueQuantity.value',
-  },
-  {
-    name: 'Pain severity mapping',
-    fhirPath: "item.where(linkId='pain').answer.valueCoding.code.first()",
-    target: 'Condition.severity.coding[0].code',
-  },
-]
-
-const chronicCareQuestionnaire = {
-  resourceType: 'Questionnaire',
-  id: 'chronic-care-followup',
-  url: 'http://example.org/fhir/Questionnaire/chronic-care-followup',
-  version: '2.1.0',
-  name: 'ChronicCareFollowupQuestionnaire',
-  title: 'Chronic Care Follow-up',
-  status: 'active',
-  subjectType: ['Patient'],
-  date: '2026-02-18',
-  item: [
-    {
-      linkId: 'demographics',
-      text: 'Demographics',
-      type: 'group',
-      item: [
-        { linkId: 'first-name', text: 'First Name', type: 'string', required: true },
-        { linkId: 'dob', text: 'Date of Birth', type: 'date', required: true },
-      ],
-    },
-    {
-      linkId: 'conditions',
-      text: 'Chronic Conditions',
-      type: 'group',
-      item: [
-        { linkId: 'has-diabetes', text: 'Diabetes diagnosed?', type: 'boolean' },
-        { linkId: 'has-hypertension', text: 'Hypertension diagnosed?', type: 'boolean' },
-        { linkId: 'has-asthma', text: 'Asthma diagnosed?', type: 'boolean' },
-      ],
-    },
-    {
-      linkId: 'diabetes-followup',
-      text: 'Diabetes Follow-up',
-      type: 'group',
-      enableWhen: [{ question: 'has-diabetes', operator: '=', answerBoolean: true }],
-      item: [
-        { linkId: 'hba1c', text: 'Latest HbA1c (%)', type: 'decimal', required: true },
-        { linkId: 'insulin', text: 'On insulin?', type: 'boolean' },
+        { linkId: 'has-allergy', answer: [{ valueBoolean: true }] },
         {
-          linkId: 'insulin-dose',
-          text: 'Daily insulin dose (units)',
-          type: 'decimal',
-          enableWhen: [{ question: 'insulin', operator: '=', answerBoolean: true }],
-        },
-      ],
-    },
-    {
-      linkId: 'medications',
-      text: 'Medication Adherence',
-      type: 'group',
-      item: [
-        { linkId: 'med-name', text: 'Primary medication name', type: 'string' },
-        { linkId: 'daily-dose', text: 'Daily dose', type: 'decimal' },
-        { linkId: 'missed-days', text: 'Missed days in last 14 days', type: 'integer' },
-        {
-          linkId: 'adherence-score',
-          text: 'Adherence score (calculated)',
-          type: 'decimal',
-          readOnly: true,
-          extension: [
-            {
-              url: 'http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-calculatedExpression',
-              valueExpression: {
-                language: 'text/fhirpath',
-                expression:
-                  "let d := item.where(linkId='medications').item.where(linkId='missed-days').answer.valueInteger.first(); iif(d.exists(), 100 - (d * 7), {})",
-              },
-            },
+          linkId: 'allergy-detail',
+          item: [
+            { linkId: 'allergy-type', answer: [{ valueCoding: { system: 'http://hl7.org/fhir/allergy-intolerance-category', code: 'medication', display: 'Medication' } }] },
+            { linkId: 'allergy-substance', answer: [{ valueString: 'Penicillin' }] },
+            { linkId: 'reaction-severity', answer: [{ valueCoding: { code: 'severe', display: 'Severe' } }] },
+            { linkId: 'reaction-description', answer: [{ valueString: 'Anaphylaxis with throat swelling' }] },
+            { linkId: 'allergy-onset', answer: [{ valueDate: '2019-03-15' }] },
           ],
         },
       ],
     },
     {
-      linkId: 'symptoms',
-      text: 'Symptom Review',
+      linkId: 'condition-section',
+      item: [
+        { linkId: 'has-condition', answer: [{ valueBoolean: true }] },
+        {
+          linkId: 'condition-detail',
+          item: [
+            { linkId: 'condition-name', answer: [{ valueString: 'Type 2 Diabetes Mellitus' }] },
+            { linkId: 'condition-clinical-status', answer: [{ valueCoding: { system: 'http://terminology.hl7.org/CodeSystem/condition-clinical', code: 'active', display: 'Active' } }] },
+            { linkId: 'condition-severity', answer: [{ valueCoding: { system: 'http://snomed.info/sct', code: '6736007', display: 'Moderate' } }] },
+            { linkId: 'condition-onset', answer: [{ valueDate: '2021-08-10' }] },
+            { linkId: 'condition-note', answer: [{ valueString: 'HbA1c trending upward. Adjusting medication.' }] },
+          ],
+        },
+      ],
+    },
+    { linkId: 'recorded-by', answer: [{ valueString: 'Dr. Singh' }] },
+    { linkId: 'summary', answer: [{ valueInteger: 2 }] },
+  ],
+}
+
+const allergyConditionFhirPathExamples = [
+  { label: 'Get allergy substance', expression: "item.where(linkId='allergy-section').item.descendants().where(linkId='allergy-substance').answer.valueString.first()" },
+  { label: 'Get allergy category code', expression: "item.where(linkId='allergy-section').item.descendants().where(linkId='allergy-type').answer.valueCoding.code.first()" },
+  { label: 'Check if allergy is severe', expression: "item.where(linkId='allergy-section').item.descendants().where(linkId='reaction-severity').answer.valueCoding.code.first() = 'severe'" },
+  { label: 'Get condition clinical status', expression: "item.where(linkId='condition-section').item.descendants().where(linkId='condition-clinical-status').answer.valueCoding.display.first()" },
+  { label: 'Get condition name', expression: "item.where(linkId='condition-section').item.descendants().where(linkId='condition-name').answer.valueString.first()" },
+  { label: 'Count items recorded', expression: "item.where(linkId='summary').answer.valueInteger.first()" },
+]
+
+const allergyConditionExtractionMappingExamples = [
+  { name: 'AllergyIntolerance category', fhirPath: "item.where(linkId='allergy-section').item.descendants().where(linkId='allergy-type').answer.valueCoding.code.first()", target: 'AllergyIntolerance.category[0]' },
+  { name: 'AllergyIntolerance substance', fhirPath: "item.where(linkId='allergy-section').item.descendants().where(linkId='allergy-substance').answer.valueString.first()", target: 'AllergyIntolerance.code.text' },
+  { name: 'AllergyIntolerance criticality', fhirPath: "item.where(linkId='allergy-section').item.descendants().where(linkId='allergy-criticality').answer.valueCoding.code.first()", target: 'AllergyIntolerance.criticality' },
+  { name: 'Condition name', fhirPath: "item.where(linkId='condition-section').item.descendants().where(linkId='condition-name').answer.valueString.first()", target: 'Condition.code.text' },
+  { name: 'Condition clinical status', fhirPath: "item.where(linkId='condition-section').item.descendants().where(linkId='condition-clinical-status').answer.valueCoding.code.first()", target: 'Condition.clinicalStatus.coding[0].code' },
+  { name: 'Condition severity', fhirPath: "item.where(linkId='condition-section').item.descendants().where(linkId='condition-severity').answer.valueCoding.code.first()", target: 'Condition.severity.coding[0].code' },
+]
+
+// ══════════════════════════════════════════════════════════════════════
+// Scenario 3 — Dental Claim
+// ══════════════════════════════════════════════════════════════════════
+
+const dentalClaimQuestionnaire = {
+  resourceType: 'Questionnaire',
+  id: 'dental-claim',
+  url: 'http://example.org/fhir/Questionnaire/dental-claim',
+  version: '1.0.0',
+  name: 'DentalClaimQuestionnaire',
+  title: 'Dental Claim Form',
+  status: 'active',
+  subjectType: ['Patient'],
+  date: '2026-02-18',
+  item: [
+    {
+      linkId: 'patient',
+      text: 'Patient Information',
+      type: 'group',
+      item: [
+        { linkId: 'patient-name', text: 'Patient Name', type: 'string', required: true },
+        { linkId: 'patient-dob', text: 'Date of Birth', type: 'date', required: true },
+        { linkId: 'patient-id', text: 'Patient ID / Member ID', type: 'string', required: true },
+      ],
+    },
+    {
+      linkId: 'provider',
+      text: 'Provider Information',
+      type: 'group',
+      item: [
+        { linkId: 'dentist-name', text: 'Dentist Name', type: 'string', required: true },
+        { linkId: 'npi', text: 'NPI Number', type: 'string', required: true },
+        { linkId: 'facility-name', text: 'Facility / Clinic Name', type: 'string' },
+      ],
+    },
+    {
+      linkId: 'service',
+      text: 'Service Details',
+      type: 'group',
+      item: [
+        { linkId: 'service-date', text: 'Date of Service', type: 'date', required: true },
+        {
+          linkId: 'procedure-code',
+          text: 'ADA Procedure Code (CDT)',
+          type: 'choice',
+          required: true,
+          answerOption: [
+            { valueCoding: { system: 'http://www.ada.org/cdt', code: 'D0120', display: 'D0120 — Periodic Oral Evaluation' } },
+            { valueCoding: { system: 'http://www.ada.org/cdt', code: 'D0150', display: 'D0150 — Comprehensive Oral Evaluation' } },
+            { valueCoding: { system: 'http://www.ada.org/cdt', code: 'D0210', display: 'D0210 — Full Mouth X-rays' } },
+            { valueCoding: { system: 'http://www.ada.org/cdt', code: 'D1110', display: 'D1110 — Prophylaxis (Adult Cleaning)' } },
+            { valueCoding: { system: 'http://www.ada.org/cdt', code: 'D2391', display: 'D2391 — Resin Composite, 1 Surface, Posterior' } },
+            { valueCoding: { system: 'http://www.ada.org/cdt', code: 'D2750', display: 'D2750 — Crown, Porcelain Fused to Metal' } },
+            { valueCoding: { system: 'http://www.ada.org/cdt', code: 'D7140', display: 'D7140 — Extraction, Erupted Tooth' } },
+          ],
+        },
+        {
+          linkId: 'tooth-number',
+          text: 'Tooth Number (1–32, or N/A)',
+          type: 'string',
+        },
+        {
+          linkId: 'surface',
+          text: 'Tooth Surface(s)',
+          type: 'choice',
+          enableWhen: [{ question: 'procedure-code', operator: '=', answerCoding: { code: 'D2391' } }],
+          answerOption: [
+            { valueCoding: { code: 'M', display: 'Mesial' } },
+            { valueCoding: { code: 'O', display: 'Occlusal' } },
+            { valueCoding: { code: 'D', display: 'Distal' } },
+            { valueCoding: { code: 'B', display: 'Buccal' } },
+            { valueCoding: { code: 'L', display: 'Lingual' } },
+          ],
+        },
+        { linkId: 'fee', text: 'Fee ($)', type: 'decimal', required: true },
+      ],
+    },
+    {
+      linkId: 'pre-auth',
+      text: 'Pre-Authorization',
+      type: 'group',
+      item: [
+        { linkId: 'pre-auth-required', text: 'Pre-authorization required?', type: 'boolean' },
+        {
+          linkId: 'pre-auth-number',
+          text: 'Pre-authorization Number',
+          type: 'string',
+          enableWhen: [{ question: 'pre-auth-required', operator: '=', answerBoolean: true }],
+          required: true,
+        },
+      ],
+    },
+    {
+      linkId: 'diagnosis',
+      text: 'Diagnosis',
       type: 'group',
       item: [
         {
-          linkId: 'breathlessness',
-          text: 'Breathlessness severity',
+          linkId: 'icd-code',
+          text: 'ICD-10 Diagnosis Code',
           type: 'choice',
           answerOption: [
-            { valueCoding: { code: 'none', display: 'None' } },
-            { valueCoding: { code: 'mild', display: 'Mild' } },
-            { valueCoding: { code: 'moderate', display: 'Moderate' } },
-            { valueCoding: { code: 'severe', display: 'Severe' } },
+            { valueCoding: { system: 'http://hl7.org/fhir/sid/icd-10-cm', code: 'K02.9', display: 'K02.9 — Dental Caries, Unspecified' } },
+            { valueCoding: { system: 'http://hl7.org/fhir/sid/icd-10-cm', code: 'K05.1', display: 'K05.1 — Chronic Gingivitis' } },
+            { valueCoding: { system: 'http://hl7.org/fhir/sid/icd-10-cm', code: 'K08.1', display: 'K08.1 — Loss of Teeth Due to Accident/Extraction' } },
+            { valueCoding: { system: 'http://hl7.org/fhir/sid/icd-10-cm', code: 'Z01.20', display: 'Z01.20 — Encounter for Dental Examination' } },
           ],
         },
-        {
-          linkId: 'edema',
-          text: 'Leg edema present?',
-          type: 'boolean',
-          enableWhen: [{ question: 'breathlessness', operator: '!=', answerCoding: { code: 'none' } }],
-        },
+        { linkId: 'clinical-note', text: 'Clinical Justification / Notes', type: 'text' },
       ],
     },
     {
-      linkId: 'care-plan-note',
-      text: 'Care plan note',
-      type: 'text',
-      enableWhen: [{ question: 'adherence-score', operator: '!=', answerDecimal: 100 }],
+      linkId: 'total-fee',
+      text: 'Total Claim Amount ($)',
+      type: 'decimal',
+      readOnly: true,
+      extension: [
+        {
+          url: 'http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-calculatedExpression',
+          valueExpression: {
+            language: 'text/fhirpath',
+            expression: "item.where(linkId='service').item.where(linkId='fee').answer.valueDecimal.first()",
+          },
+        },
+      ],
     },
   ],
 }
 
-const chronicCareQuestionnaireResponse = {
+const dentalClaimQuestionnaireResponse = {
   resourceType: 'QuestionnaireResponse',
-  id: 'chronic-care-followup-response',
-  questionnaire: 'http://example.org/fhir/Questionnaire/chronic-care-followup',
+  id: 'dental-claim-response',
+  questionnaire: 'http://example.org/fhir/Questionnaire/dental-claim',
   status: 'completed',
-  authored: '2026-02-18T15:00:00Z',
+  authored: '2026-02-18T14:15:00Z',
   item: [
     {
-      linkId: 'demographics',
+      linkId: 'patient',
       item: [
-        { linkId: 'first-name', answer: [{ valueString: 'Nora' }] },
-        { linkId: 'dob', answer: [{ valueDate: '1978-11-22' }] },
+        { linkId: 'patient-name', answer: [{ valueString: 'James Chen' }] },
+        { linkId: 'patient-dob', answer: [{ valueDate: '1985-04-22' }] },
+        { linkId: 'patient-id', answer: [{ valueString: 'DENT-90281' }] },
       ],
     },
     {
-      linkId: 'conditions',
+      linkId: 'provider',
       item: [
-        { linkId: 'has-diabetes', answer: [{ valueBoolean: true }] },
-        { linkId: 'has-hypertension', answer: [{ valueBoolean: true }] },
-        { linkId: 'has-asthma', answer: [{ valueBoolean: false }] },
+        { linkId: 'dentist-name', answer: [{ valueString: 'Dr. Maria Lopez' }] },
+        { linkId: 'npi', answer: [{ valueString: '1234567890' }] },
+        { linkId: 'facility-name', answer: [{ valueString: 'Sunrise Dental Clinic' }] },
       ],
     },
     {
-      linkId: 'diabetes-followup',
+      linkId: 'service',
       item: [
-        { linkId: 'hba1c', answer: [{ valueDecimal: 8.1 }] },
-        { linkId: 'insulin', answer: [{ valueBoolean: true }] },
-        { linkId: 'insulin-dose', answer: [{ valueDecimal: 26 }] },
+        { linkId: 'service-date', answer: [{ valueDate: '2026-02-14' }] },
+        { linkId: 'procedure-code', answer: [{ valueCoding: { system: 'http://www.ada.org/cdt', code: 'D2391', display: 'D2391 — Resin Composite, 1 Surface, Posterior' } }] },
+        { linkId: 'tooth-number', answer: [{ valueString: '14' }] },
+        { linkId: 'surface', answer: [{ valueCoding: { code: 'O', display: 'Occlusal' } }] },
+        { linkId: 'fee', answer: [{ valueDecimal: 275.00 }] },
       ],
     },
     {
-      linkId: 'medications',
+      linkId: 'pre-auth',
       item: [
-        { linkId: 'med-name', answer: [{ valueString: 'Metformin' }] },
-        { linkId: 'daily-dose', answer: [{ valueDecimal: 1000 }] },
-        { linkId: 'missed-days', answer: [{ valueInteger: 3 }] },
-        { linkId: 'adherence-score', answer: [{ valueDecimal: 79 }] },
+        { linkId: 'pre-auth-required', answer: [{ valueBoolean: false }] },
       ],
     },
     {
-      linkId: 'symptoms',
+      linkId: 'diagnosis',
       item: [
-        {
-          linkId: 'breathlessness',
-          answer: [{ valueCoding: { code: 'moderate', display: 'Moderate' } }],
-        },
-        { linkId: 'edema', answer: [{ valueBoolean: true }] },
+        { linkId: 'icd-code', answer: [{ valueCoding: { system: 'http://hl7.org/fhir/sid/icd-10-cm', code: 'K02.9', display: 'K02.9 — Dental Caries, Unspecified' } }] },
+        { linkId: 'clinical-note', answer: [{ valueString: 'Occlusal caries on tooth #14. Composite restoration performed.' }] },
       ],
     },
-    {
-      linkId: 'care-plan-note',
-      answer: [{ valueString: 'Needs medication counseling and follow-up in 4 weeks.' }],
-    },
+    { linkId: 'total-fee', answer: [{ valueDecimal: 275.00 }] },
   ],
 }
 
-const chronicCareFhirPathExamples = [
-  {
-    label: 'List all enabled condition follow-up groups',
-    expression: "item.where(linkId='conditions' or linkId='diabetes-followup').linkId",
-  },
-  {
-    label: 'Read calculated adherence score',
-    expression:
-      "item.where(linkId='medications').item.where(linkId='adherence-score').answer.valueDecimal.first()",
-  },
-  {
-    label: 'Check high-risk glycemic control',
-    expression:
-      "item.where(linkId='diabetes-followup').item.where(linkId='hba1c').answer.valueDecimal.first() > 7.0",
-  },
-  {
-    label: 'Count boolean true condition flags',
-    expression: "item.where(linkId='conditions').item.answer.valueBoolean.where($this=true).count()",
-  },
+const dentalClaimFhirPathExamples = [
+  { label: 'Get procedure code display', expression: "item.where(linkId='service').item.where(linkId='procedure-code').answer.valueCoding.display.first()" },
+  { label: 'Get total claim amount', expression: "item.where(linkId='total-fee').answer.valueDecimal.first()" },
+  { label: 'Get ICD-10 diagnosis', expression: "item.where(linkId='diagnosis').item.where(linkId='icd-code').answer.valueCoding.display.first()" },
+  { label: 'Get tooth number', expression: "item.where(linkId='service').item.where(linkId='tooth-number').answer.valueString.first()" },
+  { label: 'Check if pre-auth is required', expression: "item.where(linkId='pre-auth').item.where(linkId='pre-auth-required').answer.valueBoolean.first()" },
+  { label: 'Get dentist name and NPI', expression: "item.where(linkId='provider').item.where(linkId='dentist-name').answer.valueString.first() + ' (NPI: ' + item.where(linkId='provider').item.where(linkId='npi').answer.valueString.first() + ')'" },
 ]
 
-const chronicCareExtractionMappingExamples = [
-  {
-    name: 'HbA1c Observation value',
-    fhirPath:
-      "item.where(linkId='diabetes-followup').item.where(linkId='hba1c').answer.valueDecimal.first()",
-    target: 'Observation(code=4548-4).valueQuantity.value',
-  },
-  {
-    name: 'Medication statement dose',
-    fhirPath: "item.where(linkId='medications').item.where(linkId='daily-dose').answer.valueDecimal.first()",
-    target: 'MedicationStatement.dosage[0].doseAndRate[0].doseQuantity.value',
-  },
-  {
-    name: 'Adherence risk flag',
-    fhirPath:
-      "item.where(linkId='medications').item.where(linkId='adherence-score').answer.valueDecimal.first() < 85",
-    target: 'CarePlan.addresses(adherence-risk)',
-  },
-  {
-    name: 'Symptom severity code',
-    fhirPath: "item.where(linkId='symptoms').item.where(linkId='breathlessness').answer.valueCoding.code.first()",
-    target: 'Condition.severity.coding[0].code',
-  },
-]
-
-const maternalCareQuestionnaire = {
-  resourceType: 'Questionnaire',
-  id: 'antenatal-visit',
-  url: 'http://example.org/fhir/Questionnaire/antenatal-visit',
-  version: '1.3.0',
-  name: 'AntenatalVisitQuestionnaire',
-  title: 'Antenatal Visit Assessment',
-  status: 'active',
-  subjectType: ['Patient'],
-  date: '2026-02-18',
-  item: [
-    {
-      linkId: 'visit',
-      text: 'Visit Metadata',
-      type: 'group',
-      item: [
-        { linkId: 'first-name', text: 'Patient first name', type: 'string', required: true },
-        { linkId: 'dob', text: 'Date of birth', type: 'date', required: true },
-        { linkId: 'gestational-age', text: 'Gestational age (weeks)', type: 'integer', required: true },
-      ],
-    },
-    {
-      linkId: 'blood-pressure',
-      text: 'Blood Pressure',
-      type: 'group',
-      item: [
-        { linkId: 'systolic', text: 'Systolic mmHg', type: 'integer', required: true },
-        { linkId: 'diastolic', text: 'Diastolic mmHg', type: 'integer', required: true },
-        {
-          linkId: 'bp-risk-score',
-          text: 'BP risk score (calculated)',
-          type: 'decimal',
-          readOnly: true,
-          extension: [
-            {
-              url: 'http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-calculatedExpression',
-              valueExpression: {
-                language: 'text/fhirpath',
-                expression:
-                  "let s := item.where(linkId='blood-pressure').item.where(linkId='systolic').answer.valueInteger.first(); let d := item.where(linkId='blood-pressure').item.where(linkId='diastolic').answer.valueInteger.first(); iif(s.exists() and d.exists(), (s + d) / 2, {})",
-              },
-            },
-          ],
-        },
-      ],
-    },
-    {
-      linkId: 'warning-signs',
-      text: 'Warning Signs',
-      type: 'group',
-      item: [
-        { linkId: 'headache', text: 'Persistent headache?', type: 'boolean' },
-        { linkId: 'blurred-vision', text: 'Blurred vision?', type: 'boolean' },
-        { linkId: 'swelling', text: 'Severe swelling?', type: 'boolean' },
-        {
-          linkId: 'urgent-referral',
-          text: 'Urgent referral needed (calculated)',
-          type: 'boolean',
-          readOnly: true,
-          extension: [
-            {
-              url: 'http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-calculatedExpression',
-              valueExpression: {
-                language: 'text/fhirpath',
-                expression:
-                  "item.where(linkId='warning-signs').item.where(linkId='headache' or linkId='blurred-vision' or linkId='swelling').answer.valueBoolean.where($this=true).count() >= 2",
-              },
-            },
-          ],
-        },
-      ],
-    },
-    {
-      linkId: 'referral-note',
-      text: 'Referral note',
-      type: 'text',
-      enableWhen: [{ question: 'urgent-referral', operator: '=', answerBoolean: true }],
-    },
-  ],
-}
-
-const maternalCareQuestionnaireResponse = {
-  resourceType: 'QuestionnaireResponse',
-  id: 'antenatal-visit-response',
-  questionnaire: 'http://example.org/fhir/Questionnaire/antenatal-visit',
-  status: 'completed',
-  authored: '2026-02-18T16:30:00Z',
-  item: [
-    {
-      linkId: 'visit',
-      item: [
-        { linkId: 'first-name', answer: [{ valueString: 'Mira' }] },
-        { linkId: 'dob', answer: [{ valueDate: '1996-03-11' }] },
-        { linkId: 'gestational-age', answer: [{ valueInteger: 31 }] },
-      ],
-    },
-    {
-      linkId: 'blood-pressure',
-      item: [
-        { linkId: 'systolic', answer: [{ valueInteger: 148 }] },
-        { linkId: 'diastolic', answer: [{ valueInteger: 96 }] },
-        { linkId: 'bp-risk-score', answer: [{ valueDecimal: 122 }] },
-      ],
-    },
-    {
-      linkId: 'warning-signs',
-      item: [
-        { linkId: 'headache', answer: [{ valueBoolean: true }] },
-        { linkId: 'blurred-vision', answer: [{ valueBoolean: true }] },
-        { linkId: 'swelling', answer: [{ valueBoolean: false }] },
-        { linkId: 'urgent-referral', answer: [{ valueBoolean: true }] },
-      ],
-    },
-    {
-      linkId: 'referral-note',
-      answer: [{ valueString: 'Possible preeclampsia. Refer to high-risk obstetric clinic today.' }],
-    },
-  ],
-}
-
-const maternalCareFhirPathExamples = [
-  {
-    label: 'Compute MAP from BP answers',
-    expression:
-      "let s := item.where(linkId='blood-pressure').item.where(linkId='systolic').answer.valueInteger.first(); let d := item.where(linkId='blood-pressure').item.where(linkId='diastolic').answer.valueInteger.first(); d + ((s - d) / 3)",
-  },
-  {
-    label: 'Check referral trigger from warning signs',
-    expression:
-      "item.where(linkId='warning-signs').item.where(linkId='urgent-referral').answer.valueBoolean.first()",
-  },
-  {
-    label: 'Find all required visit fields',
-    expression: "item.where(linkId='visit').item.where(required=true).linkId",
-  },
-]
-
-const maternalCareExtractionMappingExamples = [
-  {
-    name: 'Systolic Observation value',
-    fhirPath: "item.where(linkId='blood-pressure').item.where(linkId='systolic').answer.valueInteger.first()",
-    target: 'Observation(code=8480-6).valueQuantity.value',
-  },
-  {
-    name: 'Diastolic Observation value',
-    fhirPath: "item.where(linkId='blood-pressure').item.where(linkId='diastolic').answer.valueInteger.first()",
-    target: 'Observation(code=8462-4).valueQuantity.value',
-  },
-  {
-    name: 'Urgent referral decision',
-    fhirPath:
-      "item.where(linkId='warning-signs').item.where(linkId='urgent-referral').answer.valueBoolean.first()",
-    target: 'ServiceRequest.priority',
-  },
-  {
-    name: 'Referral note text',
-    fhirPath: "item.where(linkId='referral-note').answer.valueString.first()",
-    target: 'ServiceRequest.note[0].text',
-  },
+const dentalClaimExtractionMappingExamples = [
+  { name: 'Claim procedure code', fhirPath: "item.where(linkId='service').item.where(linkId='procedure-code').answer.valueCoding.first()", target: 'Claim.item[0].productOrService.coding[0]' },
+  { name: 'Claim total amount', fhirPath: "item.where(linkId='total-fee').answer.valueDecimal.first()", target: 'Claim.total.value' },
+  { name: 'Claim service date', fhirPath: "item.where(linkId='service').item.where(linkId='service-date').answer.valueDate.first()", target: 'Claim.item[0].servicedDate' },
+  { name: 'Claim diagnosis ICD-10', fhirPath: "item.where(linkId='diagnosis').item.where(linkId='icd-code').answer.valueCoding.first()", target: 'Claim.diagnosis[0].diagnosisCodeableConcept.coding[0]' },
+  { name: 'Claim provider NPI', fhirPath: "item.where(linkId='provider').item.where(linkId='npi').answer.valueString.first()", target: 'Claim.provider.identifier.value' },
+  { name: 'Claim pre-auth number', fhirPath: "item.where(linkId='pre-auth').item.where(linkId='pre-auth-number').answer.valueString.first()", target: 'Claim.preAuthRef[0]' },
 ]
 
 export const sampleScenarios = [
   {
-    id: 'vitals-intake',
-    label: 'Vitals Intake (Baseline)',
-    description: 'Basic triage with BMI calculation, smoker-dependent questions, and pain coding.',
-    questionnaire: vitalsQuestionnaire,
-    questionnaireResponse: vitalsQuestionnaireResponse,
-    fhirPathExamples: vitalsFhirPathExamples,
-    extractionMappingExamples: vitalsExtractionMappingExamples,
+    id: 'patient-registration',
+    label: 'Patient Registration',
+    description: 'New patient intake with demographics, contact details, emergency contact, and insurance — uses answerValueSet for gender and marital status.',
+    questionnaire: patientRegQuestionnaire,
+    questionnaireResponse: patientRegQuestionnaireResponse,
+    fhirPathExamples: patientRegFhirPathExamples,
+    extractionMappingExamples: patientRegExtractionMappingExamples,
   },
   {
-    id: 'chronic-care-followup',
-    label: 'Chronic Care Follow-up (Complex)',
-    description:
-      'Multi-domain chronic disease follow-up with nested conditional sections and adherence calculation.',
-    questionnaire: chronicCareQuestionnaire,
-    questionnaireResponse: chronicCareQuestionnaireResponse,
-    fhirPathExamples: chronicCareFhirPathExamples,
-    extractionMappingExamples: chronicCareExtractionMappingExamples,
+    id: 'allergy-condition',
+    label: 'Allergy & Condition Recording',
+    description: 'Record allergies (with category, criticality, reaction) and conditions (with clinical status, severity) for a patient — uses enableWhen and calculatedExpression.',
+    questionnaire: allergyConditionQuestionnaire,
+    questionnaireResponse: allergyConditionQuestionnaireResponse,
+    fhirPathExamples: allergyConditionFhirPathExamples,
+    extractionMappingExamples: allergyConditionExtractionMappingExamples,
   },
   {
-    id: 'antenatal-visit',
-    label: 'Antenatal Visit (Risk Stratification)',
-    description:
-      'Maternal health assessment with risk scores, warning signs, and conditional referral workflow.',
-    questionnaire: maternalCareQuestionnaire,
-    questionnaireResponse: maternalCareQuestionnaireResponse,
-    fhirPathExamples: maternalCareFhirPathExamples,
-    extractionMappingExamples: maternalCareExtractionMappingExamples,
+    id: 'dental-claim',
+    label: 'Dental Claim',
+    description: 'Dental insurance claim form with ADA CDT procedure codes, ICD-10 diagnosis, tooth/surface selection, pre-authorization, and total fee calculation.',
+    questionnaire: dentalClaimQuestionnaire,
+    questionnaireResponse: dentalClaimQuestionnaireResponse,
+    fhirPathExamples: dentalClaimFhirPathExamples,
+    extractionMappingExamples: dentalClaimExtractionMappingExamples,
   },
 ]
 
