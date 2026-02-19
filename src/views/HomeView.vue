@@ -2265,10 +2265,10 @@ function buildExtractionBundle(response) {
                 <span>Questionnaire JSON</span>
                 <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
                   <button class="btn btn-sm" @click="formatPgJson" title="Format JSON (Shift+Alt+F)">Format</button>
-                  <button class="btn btn-sm" @click="pgValidateOnServer" :disabled="pgServerValidateLoading || pgParsed.error" title="Validate against FHIR server">
+                  <button class="btn btn-sm" :class="{ 'btn-primary': hasActiveServer }" @click="pgValidateOnServer" :disabled="pgServerValidateLoading || pgParsed.error || !hasActiveServer" :title="hasActiveServer ? 'Validate against FHIR server' : 'No FHIR server configured — go to FHIR Server tab'">
                     {{ pgServerValidateLoading ? '⏳' : '🏥' }} Validate
                   </button>
-                  <button class="btn btn-sm" @click="pgUploadToServer" :disabled="pgUploadLoading || pgParsed.error" title="Upload to FHIR server">
+                  <button class="btn btn-sm" :class="{ 'btn-primary': hasActiveServer }" @click="pgUploadToServer" :disabled="pgUploadLoading || pgParsed.error || !hasActiveServer" :title="hasActiveServer ? 'Upload to FHIR server' : 'No FHIR server configured — go to FHIR Server tab'">
                     {{ pgUploadLoading ? '⏳' : '☁️' }} Upload
                   </button>
                   <span v-if="pgParsed.error" style="color: var(--c-danger); font-size: 0.75rem;">Invalid JSON</span>
