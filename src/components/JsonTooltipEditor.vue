@@ -1,8 +1,18 @@
 <script setup>
 import { onBeforeUnmount, onMounted, ref, watch, nextTick } from 'vue'
 import * as monaco from 'monaco-editor'
+import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker'
+import jsonWorker from 'monaco-editor/esm/vs/language/json/json.worker?worker'
 import { getPropertyTooltip } from '@/data/fhirPropertyTooltips'
 import { schemas, knownExtensionUrls, constraintExtensionKeys } from '@/data/fhirJsonSchema'
+
+// Configure Monaco workers via Vite-native ?worker imports
+self.MonacoEnvironment = {
+  getWorker(_, label) {
+    if (label === 'json') return new jsonWorker()
+    return new editorWorker()
+  },
+}
 
 const props = defineProps({
   modelValue: {
