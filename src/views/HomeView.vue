@@ -4,6 +4,7 @@ import fhirpath from 'fhirpath'
 import r4Model from 'fhirpath/fhir-context/r4'
 import DynamicQuestionnaireForm from '@/components/DynamicQuestionnaireForm.vue'
 import FhirPathEditor from '@/components/FhirPathEditor.vue'
+import FhirServerPanel from '@/components/FhirServerPanel.vue'
 import JsonTooltipEditor from '@/components/JsonTooltipEditor.vue'
 import ResourceTreeNode from '@/components/ResourceTreeNode.vue'
 import { getPropertyGuide } from '@/data/fhirPropertyTooltips'
@@ -92,6 +93,12 @@ const tabs = [
     icon: '🔧'
   },
   {
+    id: 'server',
+    label: 'FHIR Server',
+    goal: 'Connect to real servers.',
+    icon: '🌐'
+  },
+  {
     id: 'playground',
     label: 'Playground',
     goal: 'Experiment freely.',
@@ -113,6 +120,17 @@ const tabs = [
 
 const activeTab = ref('intro')
 const authoringSection = ref('basics')
+
+// ── FHIR Server Status ──
+const serverStatus = ref({ fhir: null, terminology: null })
+function onServerStatusChange(status) {
+  serverStatus.value = status
+}
+function onLoadQuestionnaireFromServer(jsonStr) {
+  pgJson.value = jsonStr
+  pgSelectedTemplate.value = 'blank'
+  activeTab.value = 'playground'
+}
 const selectedScenarioId = ref(sampleScenarios[0]?.id || 'baseline')
 const cheatSheetQuery = ref('')
 
@@ -463,6 +481,61 @@ function pgLoadTemplate(templateId) {
 
 function pgUpdateResponse(resp) {
   pgGeneratedResponse.value = resp
+}
+
+// ── Server-Side Operations from Playground ──
+const pgServerValidateResult = ref(null)
+const pgServerValidateLoading = ref(false)
+const pgServerValidateError = ref('')
+const pgUploadLoading = ref(false)
+const pgUploadResult = ref('')
+
+async function pgValidateOnServer() {
+  if (!serverStatus.value.fhir) {
+    pgServerValidateError.value = 'No FHIR server connected. Go to FHIR Server tab to configure one.'
+    return
+  }
+  pgServerValidateLoading.value = true
+  pgServerValidateError.value = ''
+  pgServerValidateResult.value = null
+  try {
+    const { validateResource } = await import('@/utils/fhirClient')
+    const servers = (await import('@/utils/fhirClient')).loadServers()
+    const activeServer = (await import('@/utils/fhirClient')).getActiveServer(servers, 'fhir')
+    if (!activeServer) throw new Error('No active FHIR server')
+    const resource = JSON.parse(pgJson.value)
+    pgServerValidateResult.value = await validateResource(activeServer, resource)
+  } catch (err) {
+    pgServerValidateError.value = err.message
+  }
+  pgServerValidateLoading.value = false
+}
+
+async function pgUploadToServer() {
+  if (!serverStatus.value.fhir) {
+    pgUploadResult.value = '❌ No FHIR server connected.'
+    return
+  }
+  pgUploadLoading.value = true
+  pgUploadResult.value = ''
+  try {
+    const { createResource, updateResource, loadServers, getActiveServer } = await import('@/utils/fhirClient')
+    const servers = loadServers()
+    const activeServer = getActiveServer(servers, 'fhir')
+    if (!activeServer) throw new Error('No active FHIR server')
+    const resource = JSON.parse(pgJson.value)
+    let result
+    if (resource.id) {
+      result = await updateResource(activeServer, resource)
+      pgUploadResult.value = `✅ Updated ${result.resourceType}/${result.id} on server`
+    } else {
+      result = await createResource(activeServer, resource)
+      pgUploadResult.value = `✅ Created ${result.resourceType}/${result.id} on server`
+    }
+  } catch (err) {
+    pgUploadResult.value = `❌ ${err.message}`
+  }
+  pgUploadLoading.value = false
 }
 
 function pgRunFhirPath() {
@@ -1564,6 +1637,16 @@ function buildExtractionBundle(response) {
             </option>
           </select>
           
+          <!-- Server Status Indicator -->
+          <div v-if="serverStatus.fhir || serverStatus.terminology" class="server-status-pills">
+            <span v-if="serverStatus.fhir" class="server-pill" :class="{ connected: serverStatus.fhir.connected }" @click="goToStep('server')" title="Click to manage servers">
+              🏥 {{ serverStatus.fhir.connected ? '●' : '○' }}
+            </span>
+            <span v-if="serverStatus.terminology" class="server-pill" :class="{ connected: serverStatus.terminology.connected }" @click="goToStep('server')" title="Click to manage servers">
+              📖 {{ serverStatus.terminology.connected ? '●' : '○' }}
+            </span>
+          </div>
+
           <button 
             v-if="activeTab !== 'intro'"
             class="btn btn-sm" 
@@ -1832,7 +1915,7 @@ function buildExtractionBundle(response) {
               <h5>{{ example.title }}</h5>
               <p class="hint-text" style="margin-bottom: 0.5rem;">{{ example.description }}</p>
               <pre class="code-output" style="font-size: 0.75rem; max-height: 250px; overflow: auto;">{{ example.snippet }}</pre>
-              <button class="btn btn-sm" style="margin-top: 0.5rem;" @click="tryInPlayground(example.snippet)">🧪 Try in Playground</button>
+              <button v-if="isJsonSnippet(example.snippet)" class="btn btn-sm" style="margin-top: 0.5rem;" @click="tryInPlayground(example.snippet)">🧪 Try in Playground</button>
             </article>
           </div>
         </div>
@@ -1872,7 +1955,7 @@ function buildExtractionBundle(response) {
               </div>
               <p class="hint-text" style="margin-bottom: 0.5rem;">{{ example.description }}</p>
               <pre class="code-output" style="font-size: 0.75rem; max-height: 300px; overflow: auto;">{{ example.snippet }}</pre>
-              <button class="btn btn-sm" style="margin-top: 0.5rem;" @click="tryInPlayground(example.snippet)">🧪 Try in Playground</button>
+              <button v-if="isJsonSnippet(example.snippet)" class="btn btn-sm" style="margin-top: 0.5rem;" @click="tryInPlayground(example.snippet)">🧪 Try in Playground</button>
             </article>
           </div>
         </div>
@@ -1912,7 +1995,7 @@ function buildExtractionBundle(response) {
               </div>
               <p class="hint-text" style="margin-bottom: 0.5rem;">{{ example.description }}</p>
               <pre class="code-output" style="font-size: 0.75rem; max-height: 300px; overflow: auto;">{{ example.snippet }}</pre>
-              <button class="btn btn-sm" style="margin-top: 0.5rem;" @click="tryInPlayground(example.snippet)">🧪 Try in Playground</button>
+              <button v-if="isJsonSnippet(example.snippet)" class="btn btn-sm" style="margin-top: 0.5rem;" @click="tryInPlayground(example.snippet)">🧪 Try in Playground</button>
             </article>
           </div>
 
@@ -1978,7 +2061,7 @@ function buildExtractionBundle(response) {
               <h5>{{ example.title }}</h5>
               <p class="hint-text" style="margin-bottom: 0.5rem;">{{ example.description }}</p>
               <pre class="code-output" style="font-size: 0.75rem; max-height: 300px; overflow: auto;">{{ example.snippet }}</pre>
-              <button class="btn btn-sm" style="margin-top: 0.5rem;" @click="tryInPlayground(example.snippet)">🧪 Try in Playground</button>
+              <button v-if="isJsonSnippet(example.snippet)" class="btn btn-sm" style="margin-top: 0.5rem;" @click="tryInPlayground(example.snippet)">🧪 Try in Playground</button>
             </article>
           </div>
         </div>
@@ -2030,7 +2113,7 @@ function buildExtractionBundle(response) {
               <h5>{{ example.title }}</h5>
               <p class="hint-text" style="margin-bottom: 0.5rem;">{{ example.description }}</p>
               <pre class="code-output" style="font-size: 0.75rem; max-height: 300px; overflow: auto;">{{ example.snippet }}</pre>
-              <button class="btn btn-sm" style="margin-top: 0.5rem;" @click="tryInPlayground(example.snippet)">🧪 Try in Playground</button>
+              <button v-if="isJsonSnippet(example.snippet)" class="btn btn-sm" style="margin-top: 0.5rem;" @click="tryInPlayground(example.snippet)">🧪 Try in Playground</button>
             </article>
           </div>
         </div>
@@ -2104,6 +2187,14 @@ function buildExtractionBundle(response) {
           </div>
         </div>
 
+        <!-- FHIR SERVER -->
+        <div v-if="activeTab === 'server'" class="card" style="max-width: 1100px; margin: 0 auto; padding: 0; overflow: hidden;">
+          <FhirServerPanel
+            @server-status-change="onServerStatusChange"
+            @load-questionnaire="onLoadQuestionnaireFromServer"
+          />
+        </div>
+
         <!-- PLAYGROUND -->
         <div v-if="activeTab === 'playground'" class="playground-shell">
           <!-- Mode Switcher -->
@@ -2150,11 +2241,21 @@ function buildExtractionBundle(response) {
             <div class="pane">
               <div class="pane-header">
                 <span>Questionnaire JSON</span>
-                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
                   <button class="btn btn-sm" @click="formatPgJson" title="Format JSON (Shift+Alt+F)">Format</button>
+                  <button class="btn btn-sm" @click="pgValidateOnServer" :disabled="pgServerValidateLoading || pgParsed.error" title="Validate against FHIR server">
+                    {{ pgServerValidateLoading ? '⏳' : '🏥' }} Validate
+                  </button>
+                  <button class="btn btn-sm" @click="pgUploadToServer" :disabled="pgUploadLoading || pgParsed.error" title="Upload to FHIR server">
+                    {{ pgUploadLoading ? '⏳' : '☁️' }} Upload
+                  </button>
                   <span v-if="pgParsed.error" style="color: var(--c-danger); font-size: 0.75rem;">Invalid JSON</span>
                   <span v-else style="color: var(--c-success); font-size: 0.75rem;">Valid</span>
                 </div>
+              </div>
+              <div v-if="pgUploadResult" style="padding: 0.4rem 0.75rem; font-size: 0.8rem; border-bottom: 1px solid var(--c-border);" :style="{ background: pgUploadResult.startsWith('✅') ? '#f0fdf4' : '#fef2f2', color: pgUploadResult.startsWith('✅') ? '#166534' : '#991b1b' }">
+                {{ pgUploadResult }}
+                <button style="border: none; background: none; cursor: pointer; float: right; font-size: 0.8rem;" @click="pgUploadResult = ''">✕</button>
               </div>
               <div class="pane-body">
                 <JsonTooltipEditor
