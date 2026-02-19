@@ -1,7 +1,8 @@
 <script setup>
-import { computed, onMounted, reactive, watch } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import fhirpath from 'fhirpath'
 import r4Model from 'fhirpath/fhir-context/r4'
+import { loadServers, getActiveServer, expandValueSet } from '@/utils/fhirClient'
 
 const props = defineProps({
   questionnaire: {
@@ -15,6 +16,61 @@ const emit = defineEmits(['response-updated'])
 const answers = reactive({})
 const touched = reactive({})
 const validationErrors = reactive({})
+
+// ── ValueSet Expansion ──────────────────────────────────────────────
+const expandedOptions = reactive({})   // { [linkId]: answerOption[] }
+const expandingVS = reactive({})       // { [linkId]: boolean }
+const expandErrors = reactive({})      // { [linkId]: string }
+
+function getTermServer() {
+  try {
+    const servers = loadServers()
+    return getActiveServer(servers, 'terminology') || getActiveServer(servers, 'fhir') || null
+  } catch { return null }
+}
+
+/** Walk all items (including nested groups) and expand any answerValueSet references */
+async function expandAllValueSets(itemList) {
+  if (!itemList?.length) return
+  const server = getTermServer()
+  if (!server) return
+
+  const tasks = []
+  const walk = (items) => {
+    for (const item of items) {
+      if (item.answerValueSet && !item.answerOption?.length) {
+        tasks.push(expandSingleVS(server, item))
+      }
+      if (item.item?.length) walk(item.item)
+    }
+  }
+  walk(itemList)
+  await Promise.allSettled(tasks)
+}
+
+async function expandSingleVS(server, item) {
+  const linkId = item.linkId
+  expandingVS[linkId] = true
+  delete expandErrors[linkId]
+  try {
+    const result = await expandValueSet(server, item.answerValueSet, '', 200)
+    const concepts = result?.expansion?.contains || []
+    expandedOptions[linkId] = concepts.map(c => ({
+      valueCoding: { system: c.system, code: c.code, display: c.display || c.code }
+    }))
+  } catch (err) {
+    expandErrors[linkId] = err.message || 'Failed to expand ValueSet'
+    expandedOptions[linkId] = []
+  }
+  expandingVS[linkId] = false
+}
+
+/** Get the effective options for a choice item (inline answerOption or expanded ValueSet) */
+function getEffectiveOptions(item) {
+  if (item.answerOption?.length) return item.answerOption
+  if (expandedOptions[item.linkId]?.length) return expandedOptions[item.linkId]
+  return []
+}
 
 const items = computed(() => props.questionnaire.item ?? [])
 
@@ -131,7 +187,8 @@ function buildAnswer(item) {
     case 'date':
       return { valueDate: String(value) }
     case 'choice': {
-      const matchedOpt = item.answerOption?.find((opt) => getOptionValue(opt) === value)
+      const opts = getEffectiveOptions(item)
+      const matchedOpt = opts.find((opt) => getOptionValue(opt) === value)
       if (matchedOpt) {
         if (matchedOpt.valueCoding) return { valueCoding: matchedOpt.valueCoding }
         if (Object.hasOwn(matchedOpt, 'valueInteger')) return { valueCoding: { code: String(matchedOpt.valueInteger), display: String(matchedOpt.valueInteger) } }
@@ -418,6 +475,7 @@ watch(
     })
     applyInitialValues()
     refreshStateAndEmit()
+    expandAllValueSets(props.questionnaire.item)
   },
   { deep: true },
 )
@@ -425,6 +483,7 @@ watch(
 onMounted(() => {
   applyInitialValues()
   refreshStateAndEmit()
+  expandAllValueSets(props.questionnaire.item)
 })
 </script>
 
@@ -455,25 +514,29 @@ onMounted(() => {
         @blur="onBlur(item)"
       />
 
-      <select
-        v-else-if="item.type === 'choice'"
-        :id="item.linkId"
-        class="question-input"
-        :class="{ 'question-input--invalid': validationErrors[item.linkId]?.length }"
-        :value="answers[item.linkId] || ''"
-        :disabled="isCalculated(item)"
-        @change="onInput(item, $event.target.value)"
-        @blur="onBlur(item)"
-      >
-        <option value="">Select option</option>
-        <option
-          v-for="(option, index) in item.answerOption || []"
-          :key="`${item.linkId}-opt-${index}`"
-          :value="getOptionValue(option)"
+      <div v-else-if="item.type === 'choice'" style="position: relative;">
+        <select
+          :id="item.linkId"
+          class="question-input"
+          :class="{ 'question-input--invalid': validationErrors[item.linkId]?.length }"
+          :value="answers[item.linkId] || ''"
+          :disabled="isCalculated(item) || expandingVS[item.linkId]"
+          @change="onInput(item, $event.target.value)"
+          @blur="onBlur(item)"
         >
-          {{ getOptionLabel(option) }}
-        </option>
-      </select>
+          <option value="">{{ expandingVS[item.linkId] ? 'Loading options…' : 'Select option' }}</option>
+          <option
+            v-for="(option, index) in getEffectiveOptions(item)"
+            :key="`${item.linkId}-opt-${index}`"
+            :value="getOptionValue(option)"
+          >
+            {{ getOptionLabel(option) }}
+          </option>
+        </select>
+        <span v-if="expandErrors[item.linkId]" style="font-size: 0.75rem; color: #b45309; margin-top: 0.2rem; display: block;">
+          ⚠️ Could not load options: {{ expandErrors[item.linkId] }}
+        </span>
+      </div>
 
       <input
         v-else-if="item.type === 'boolean'"
