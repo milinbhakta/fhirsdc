@@ -600,8 +600,11 @@ async function pgPopulate() {
     const activeServer = _getActiveServer(servers, 'fhir')
     if (!activeServer) throw new Error('No active FHIR server')
     const q = JSON.parse(pgJson.value)
-    const qUrl = q.url || `Questionnaire/${q.id || 'unknown'}`
-    const result = await _populateQuestionnaire(activeServer, qUrl, pgPopulateSubject.value || undefined)
+    const result = await _populateQuestionnaire(activeServer, {
+      questionnaireId: q.id || undefined,
+      questionnaireResource: q,
+      subjectRef: pgPopulateSubject.value || undefined,
+    })
     pgPopulateResult.value = result
   } catch (err) {
     pgPopulateError.value = err.message

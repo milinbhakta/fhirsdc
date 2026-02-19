@@ -182,15 +182,28 @@ export async function lookupCode(server, system, code) {
   return fhirFetch(server, `/CodeSystem/$lookup?${params}`)
 }
 
-export async function populateQuestionnaire(server, questionnaireUrl, subjectRef) {
-  const params = {
-    resourceType: 'Parameters',
-    parameter: [
-      { name: 'questionnaire', valueCanonical: questionnaireUrl },
-    ],
-  }
+/**
+ * Call $populate on a FHIR server.
+ * - If `questionnaireId` is provided, uses instance-level: Questionnaire/{id}/$populate
+ * - Otherwise falls back to type-level with the questionnaire resource as a parameter.
+ */
+export async function populateQuestionnaire(server, { questionnaireId, questionnaireResource, subjectRef } = {}) {
+  const params = { resourceType: 'Parameters', parameter: [] }
   if (subjectRef) {
     params.parameter.push({ name: 'subject', valueReference: { reference: subjectRef } })
+  }
+
+  // Prefer instance-level (most servers support this reliably)
+  if (questionnaireId) {
+    return fhirFetch(server, `/Questionnaire/${encodeURIComponent(questionnaireId)}/$populate`, {
+      method: 'POST',
+      body: JSON.stringify(params),
+    })
+  }
+
+  // Type-level: pass the questionnaire resource directly
+  if (questionnaireResource) {
+    params.parameter.push({ name: 'questionnaire', resource: questionnaireResource })
   }
   return fhirFetch(server, '/Questionnaire/$populate', {
     method: 'POST',
@@ -198,7 +211,22 @@ export async function populateQuestionnaire(server, questionnaireUrl, subjectRef
   })
 }
 
+/**
+ * Call $extract on a FHIR server.
+ * Posts the QuestionnaireResponse directly to the $extract endpoint.
+ */
 export async function extractResponse(server, questionnaireResponse) {
+  // Try instance-level if the QR has an id on the server
+  if (questionnaireResponse.id && !questionnaireResponse.id.startsWith('urn:')) {
+    try {
+      return await fhirFetch(server, `/QuestionnaireResponse/${encodeURIComponent(questionnaireResponse.id)}/$extract`, {
+        method: 'POST',
+        body: JSON.stringify({ resourceType: 'Parameters', parameter: [] }),
+      })
+    } catch { /* fall through to type-level */ }
+  }
+
+  // Type-level: pass QR as a resource parameter
   const params = {
     resourceType: 'Parameters',
     parameter: [
