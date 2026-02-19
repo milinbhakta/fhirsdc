@@ -1620,6 +1620,56 @@ function isJsonSnippet(snippet) {
   return /^\s*[\[{]/.test(snippet)
 }
 
+/**
+ * Walk an item (and its children) to find enableWhen references, and generate
+ * stub question items so the playground form is interactive.
+ */
+function generateEnableWhenPrereqs(item) {
+  const refs = new Map() // linkId → expected answer type
+
+  const collectRefs = (it) => {
+    if (it.enableWhen?.length) {
+      for (const cond of it.enableWhen) {
+        if (cond.question && !refs.has(cond.question)) {
+          // Determine the type from the answer key
+          if (Object.hasOwn(cond, 'answerBoolean')) refs.set(cond.question, 'boolean')
+          else if (Object.hasOwn(cond, 'answerInteger')) refs.set(cond.question, 'integer')
+          else if (Object.hasOwn(cond, 'answerDecimal')) refs.set(cond.question, 'decimal')
+          else if (Object.hasOwn(cond, 'answerDate')) refs.set(cond.question, 'date')
+          else if (Object.hasOwn(cond, 'answerCoding')) refs.set(cond.question, 'choice')
+          else if (Object.hasOwn(cond, 'answerString')) refs.set(cond.question, 'string')
+          else refs.set(cond.question, 'boolean') // default to boolean for exists checks
+        }
+      }
+    }
+    if (it.item?.length) it.item.forEach(collectRefs)
+  }
+  collectRefs(item)
+
+  // Remove refs that match the item's own linkId (self-reference)
+  refs.delete(item.linkId)
+
+  // Build stub items
+  const stubs = []
+  for (const [linkId, type] of refs) {
+    const label = linkId.replace(/[-_]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+    if (type === 'choice') {
+      stubs.push({
+        linkId,
+        text: label,
+        type: 'choice',
+        answerOption: [
+          { valueCoding: { code: 'yes', display: 'Yes' } },
+          { valueCoding: { code: 'no', display: 'No' } },
+        ],
+      })
+    } else {
+      stubs.push({ linkId, text: label, type })
+    }
+  }
+  return stubs
+}
+
 function tryInPlayground(snippet) {
   // Load a JSON snippet into the playground and navigate there
   if (!isJsonSnippet(snippet)) {
@@ -1639,12 +1689,14 @@ function tryInPlayground(snippet) {
     }
     // If it's a Questionnaire item fragment (has linkId), wrap in a Questionnaire envelope
     else if (parsed.linkId) {
+      // Auto-generate referenced enableWhen questions so the form is interactive
+      const prerequisiteItems = generateEnableWhenPrereqs(parsed)
       const wrapped = {
         resourceType: 'Questionnaire',
         id: 'playground-example',
         status: 'active',
         title: parsed.text || 'Playground Example',
-        item: [parsed],
+        item: [...prerequisiteItems, parsed],
       }
       pgJson.value = JSON.stringify(wrapped, null, 2)
     }
