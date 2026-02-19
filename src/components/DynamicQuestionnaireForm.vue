@@ -436,12 +436,22 @@ function getCollapsible(item) {
 
 function getMinValue(item) {
   const ext = getExtValue(item, 'http://hl7.org/fhir/StructureDefinition/minValue')
-  return ext?.valueInteger ?? ext?.valueDecimal ?? null
+  return ext?.valueInteger ?? ext?.valueDecimal ?? ext?.valueDate ?? null
 }
 
 function getMaxValue(item) {
   const ext = getExtValue(item, 'http://hl7.org/fhir/StructureDefinition/maxValue')
-  return ext?.valueInteger ?? ext?.valueDecimal ?? null
+  return ext?.valueInteger ?? ext?.valueDecimal ?? ext?.valueDate ?? null
+}
+
+function getMinLength(item) {
+  const ext = getExtValue(item, 'http://hl7.org/fhir/StructureDefinition/minLength')
+  return ext?.valueInteger ?? null
+}
+
+function getRegex(item) {
+  const ext = getExtValue(item, 'http://hl7.org/fhir/StructureDefinition/regex')
+  return ext?.valueString || null
 }
 
 function getConstraints(item) {
@@ -461,7 +471,7 @@ function getConstraints(item) {
 }
 
 function hasConstraints(item) {
-  return getConstraints(item).length > 0
+  return getConstraints(item).length > 0 || getMinValue(item) !== null || getMaxValue(item) !== null || getMinLength(item) !== null || getRegex(item) !== null
 }
 
 function evaluateAllValidation() {
@@ -479,6 +489,47 @@ function evaluateAllValidation() {
 
     if (item.maxLength && typeof value === 'string' && value.length > item.maxLength) {
       errors.push(`Maximum length is ${item.maxLength} characters (current: ${value.length}).`)
+    }
+
+    // minLength extension
+    const minLen = getMinLength(item)
+    if (minLen !== null && typeof value === 'string' && hasValue && value.length < minLen) {
+      errors.push(`Minimum length is ${minLen} characters (current: ${value.length}).`)
+    }
+
+    // minValue / maxValue extensions
+    if (hasValue) {
+      const numValue = Number(value)
+      const minVal = getMinValue(item)
+      const maxVal = getMaxValue(item)
+
+      if (minVal !== null && !Number.isNaN(numValue) && typeof minVal === 'number' && numValue < minVal) {
+        errors.push(`Value must be at least ${minVal}.`)
+      }
+      if (maxVal !== null && !Number.isNaN(numValue) && typeof maxVal === 'number' && numValue > maxVal) {
+        errors.push(`Value must be at most ${maxVal}.`)
+      }
+
+      // Date min/max
+      if (typeof minVal === 'string' && typeof value === 'string' && value < minVal) {
+        errors.push(`Date must be on or after ${minVal}.`)
+      }
+      if (typeof maxVal === 'string' && typeof value === 'string' && value > maxVal) {
+        errors.push(`Date must be on or before ${maxVal}.`)
+      }
+    }
+
+    // regex extension
+    const regexPattern = getRegex(item)
+    if (regexPattern && hasValue && typeof value === 'string') {
+      try {
+        const re = new RegExp(regexPattern)
+        if (!re.test(value)) {
+          errors.push(`Value does not match the required pattern.`)
+        }
+      } catch {
+        // invalid regex — skip
+      }
     }
 
     if (isTouched || hasValue) {
