@@ -122,7 +122,26 @@ const activeTab = ref('intro')
 const authoringSection = ref('basics')
 
 // ── FHIR Server Status ──
-const serverStatus = ref({ fhir: null, terminology: null })
+import { loadServers as _loadServers, getActiveServer as _getActiveServer } from '@/utils/fhirClient'
+
+function initServerStatus() {
+  const servers = _loadServers()
+  for (const type of ['fhir', 'terminology']) {
+    if (!servers.find(s => s.type === type && s.active)) {
+      const first = servers.find(s => s.type === type)
+      if (first) first.active = true
+    }
+  }
+  const fhir = _getActiveServer(servers, 'fhir')
+  const tx = _getActiveServer(servers, 'terminology')
+  return {
+    fhir: fhir ? { name: fhir.name, url: fhir.url, connected: false } : null,
+    terminology: tx ? { name: tx.name, url: tx.url, connected: false } : null,
+  }
+}
+
+const serverStatus = ref(initServerStatus())
+
 function onServerStatusChange(status) {
   serverStatus.value = status
 }
@@ -484,27 +503,31 @@ function pgUpdateResponse(resp) {
 }
 
 // ── Server-Side Operations from Playground ──
+import { validateResource as _validateResource, createResource as _createResource, updateResource as _updateResource } from '@/utils/fhirClient'
 const pgServerValidateResult = ref(null)
 const pgServerValidateLoading = ref(false)
 const pgServerValidateError = ref('')
 const pgUploadLoading = ref(false)
 const pgUploadResult = ref('')
 
+const hasActiveServer = computed(() => !!serverStatus.value.fhir)
+
 async function pgValidateOnServer() {
-  if (!serverStatus.value.fhir) {
-    pgServerValidateError.value = 'No FHIR server connected. Go to FHIR Server tab to configure one.'
+  if (!hasActiveServer.value) {
+    pgServerValidateError.value = 'No FHIR server configured. Go to the FHIR Server tab to add one, then click "🔌 Test" to connect.'
+    pgOutputTab.value = 'validate'
     return
   }
   pgServerValidateLoading.value = true
   pgServerValidateError.value = ''
   pgServerValidateResult.value = null
+  pgOutputTab.value = 'validate'
   try {
-    const { validateResource } = await import('@/utils/fhirClient')
-    const servers = (await import('@/utils/fhirClient')).loadServers()
-    const activeServer = (await import('@/utils/fhirClient')).getActiveServer(servers, 'fhir')
+    const servers = _loadServers()
+    const activeServer = _getActiveServer(servers, 'fhir')
     if (!activeServer) throw new Error('No active FHIR server')
     const resource = JSON.parse(pgJson.value)
-    pgServerValidateResult.value = await validateResource(activeServer, resource)
+    pgServerValidateResult.value = await _validateResource(activeServer, resource)
   } catch (err) {
     pgServerValidateError.value = err.message
   }
@@ -512,24 +535,23 @@ async function pgValidateOnServer() {
 }
 
 async function pgUploadToServer() {
-  if (!serverStatus.value.fhir) {
-    pgUploadResult.value = '❌ No FHIR server connected.'
+  if (!hasActiveServer.value) {
+    pgUploadResult.value = '❌ No FHIR server configured. Go to the FHIR Server tab to add one.'
     return
   }
   pgUploadLoading.value = true
   pgUploadResult.value = ''
   try {
-    const { createResource, updateResource, loadServers, getActiveServer } = await import('@/utils/fhirClient')
-    const servers = loadServers()
-    const activeServer = getActiveServer(servers, 'fhir')
+    const servers = _loadServers()
+    const activeServer = _getActiveServer(servers, 'fhir')
     if (!activeServer) throw new Error('No active FHIR server')
     const resource = JSON.parse(pgJson.value)
     let result
     if (resource.id) {
-      result = await updateResource(activeServer, resource)
+      result = await _updateResource(activeServer, resource)
       pgUploadResult.value = `✅ Updated ${result.resourceType}/${result.id} on server`
     } else {
-      result = await createResource(activeServer, resource)
+      result = await _createResource(activeServer, resource)
       pgUploadResult.value = `✅ Created ${result.resourceType}/${result.id} on server`
     }
   } catch (err) {
@@ -2251,6 +2273,7 @@ function buildExtractionBundle(response) {
                   </button>
                   <span v-if="pgParsed.error" style="color: var(--c-danger); font-size: 0.75rem;">Invalid JSON</span>
                   <span v-else style="color: var(--c-success); font-size: 0.75rem;">Valid</span>
+                  <span v-if="!hasActiveServer" style="color: var(--c-warning, #b45309); font-size: 0.7rem; opacity: 0.8;" title="Configure a FHIR server in the FHIR Server tab to enable server features">⚠️ No server</span>
                 </div>
               </div>
               <div v-if="pgUploadResult" style="padding: 0.4rem 0.75rem; font-size: 0.8rem; border-bottom: 1px solid var(--c-border);" :style="{ background: pgUploadResult.startsWith('✅') ? '#f0fdf4' : '#fef2f2', color: pgUploadResult.startsWith('✅') ? '#166534' : '#991b1b' }">

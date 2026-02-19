@@ -79,13 +79,27 @@ function buildHeaders(server) {
 
 async function fhirFetch(server, path, options = {}) {
   const url = `${server.url}${path.startsWith('/') ? '' : '/'}${path}`
-  const resp = await fetch(url, {
-    ...options,
-    headers: {
-      ...buildHeaders(server),
-      ...(options.headers || {}),
-    },
-  })
+  let resp
+  try {
+    resp = await fetch(url, {
+      ...options,
+      headers: {
+        ...buildHeaders(server),
+        ...(options.headers || {}),
+      },
+    })
+  } catch (networkErr) {
+    // Network errors include CORS blocks, DNS failures, server unreachable
+    const msg = networkErr.message || 'Network error'
+    if (msg === 'Failed to fetch' || msg.includes('NetworkError') || msg.includes('CORS')) {
+      throw new Error(
+        `Network error — the server may be blocking browser requests (CORS). ` +
+        `If using Azure FHIR, enable CORS in Azure Portal → FHIR service → CORS settings, ` +
+        `or use a CORS proxy. Original: ${msg}`
+      )
+    }
+    throw new Error(`Network error: ${msg}`)
+  }
 
   const contentType = resp.headers.get('content-type') || ''
   let body = null
