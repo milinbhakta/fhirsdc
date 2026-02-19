@@ -1,6 +1,8 @@
 export const learningModules = {
   intro: {
     title: 'Module 0: The SDC Standard',
+    specUrl: 'https://hl7.org/fhir/uv/sdc/',
+    icon: '🏠',
     sections: [
       {
         title: 'What is SDC?',
@@ -26,6 +28,8 @@ export const learningModules = {
   },
   structure: {
     title: 'Module 1: Structure & Hierarchy',
+    specUrl: 'https://hl7.org/fhir/R4/questionnaire.html',
+    icon: '🏗️',
     sections: [
       {
         title: 'The Item Graph',
@@ -51,6 +55,8 @@ export const learningModules = {
   },
   rendering: {
     title: 'Module 2: Form Rendering',
+    specUrl: 'https://hl7.org/fhir/uv/sdc/rendering.html',
+    icon: '🎨',
     sections: [
       {
         title: 'Rendering Extensions Overview',
@@ -81,6 +87,8 @@ export const learningModules = {
   },
   logic: {
     title: 'Module 3: Logic Lab',
+    specUrl: 'https://hl7.org/fhirpath/',
+    icon: '🧠',
     sections: [
       {
         title: 'FHIRPath in SDC',
@@ -106,6 +114,8 @@ export const learningModules = {
   },
   behavior: {
     title: 'Module 4: Form Behavior',
+    specUrl: 'https://hl7.org/fhir/uv/sdc/behavior.html',
+    icon: '⚙️',
     sections: [
       {
         title: 'EnableWhen',
@@ -161,6 +171,8 @@ export const learningModules = {
   },
   population: {
     title: 'Module 5: Population',
+    specUrl: 'https://hl7.org/fhir/uv/sdc/populate.html',
+    icon: '📥',
     sections: [
       {
         title: 'What is Population?',
@@ -196,6 +208,8 @@ export const learningModules = {
   },
   extraction: {
     title: 'Module 6: Data Extraction',
+    specUrl: 'https://hl7.org/fhir/uv/sdc/extraction.html',
+    icon: '📤',
     sections: [
       {
         title: 'What is Extraction?',
@@ -236,6 +250,8 @@ export const learningModules = {
   },
   modular: {
     title: 'Module 7: Modular Forms',
+    specUrl: 'https://hl7.org/fhir/uv/sdc/modular.html',
+    icon: '🧩',
     sections: [
       {
         title: 'What are Modular Forms?',
@@ -266,6 +282,8 @@ export const learningModules = {
   },
   adaptive: {
     title: 'Module 8: Adaptive Forms',
+    specUrl: 'https://hl7.org/fhir/uv/sdc/adaptive.html',
+    icon: '🔄',
     sections: [
       {
         title: 'What are Adaptive Forms?',
@@ -301,6 +319,8 @@ export const learningModules = {
   },
   workflow: {
     title: 'Module 9: Workflow & Conformance',
+    specUrl: 'https://hl7.org/fhir/uv/sdc/workflow.html',
+    icon: '🔧',
     sections: [
       {
         title: 'SDC System Roles',

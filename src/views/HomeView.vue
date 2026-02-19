@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, ref, watch, onMounted } from 'vue'
 import fhirpath from 'fhirpath'
 import r4Model from 'fhirpath/fhir-context/r4'
 import DynamicQuestionnaireForm from '@/components/DynamicQuestionnaireForm.vue'
@@ -8,6 +8,7 @@ import JsonTooltipEditor from '@/components/JsonTooltipEditor.vue'
 import ResourceTreeNode from '@/components/ResourceTreeNode.vue'
 import { getPropertyGuide } from '@/data/fhirPropertyTooltips'
 import { learningModules } from '@/data/learningModules'
+import { renderMarkdown } from '@/utils/renderMarkdown'
 import {
   fhirPathGrammarCheatSheet,
   fhirPathSyntaxRules,
@@ -126,6 +127,37 @@ const selectedFhirPathResource = ref('QuestionnaireResponse')
 const fhirPathExpression = ref("item.where(linkId='pain').answer.valueCoding.display")
 const fhirPathResult = ref('')
 const fhirPathError = ref('')
+
+// ── Accordion / Collapsible State ──
+const expandedSections = ref({})
+function toggleSection(moduleId, idx) {
+  const key = `${moduleId}-${idx}`
+  expandedSections.value[key] = !expandedSections.value[key]
+}
+function isSectionOpen(moduleId, idx) {
+  const key = `${moduleId}-${idx}`
+  // First section defaults open
+  return expandedSections.value[key] ?? (idx === 0)
+}
+
+// ── Progress Tracker ──
+const visitedModules = ref(new Set())
+function loadProgress() {
+  try {
+    const saved = localStorage.getItem('fhirsdc-progress')
+    if (saved) visitedModules.value = new Set(JSON.parse(saved))
+  } catch { /* ignore */ }
+}
+function saveProgress() {
+  try {
+    localStorage.setItem('fhirsdc-progress', JSON.stringify([...visitedModules.value]))
+  } catch { /* ignore */ }
+}
+watch(activeTab, (tabId) => {
+  visitedModules.value.add(tabId)
+  saveProgress()
+}, { immediate: true })
+onMounted(loadProgress)
 
 // ── Playground State ──
 const playgroundTemplates = [
@@ -671,7 +703,8 @@ const quizQuestions = [
       "To replace the Questionnaire resource with a binary document format",
       "To restrict the use of FHIRPath in clinical settings"
     ],
-    answer: 1
+    answer: 1,
+    explanation: "SDC extends the base Questionnaire and QuestionnaireResponse with extensions for population, rendering, behavior, extraction, modular and adaptive forms. See Module 0."
   },
   {
     question: "Which `item.type` in a FHIR Questionnaire represents a question with a set of allowed answers where multiple selections may be permitted?",
@@ -681,7 +714,8 @@ const quizQuestions = [
       "choice",
       "boolean"
     ],
-    answer: 2
+    answer: 2,
+    explanation: "`choice` type allows selection from a defined set of answers (answerOption or answerValueSet). With `repeats: true`, multiple selections are allowed. See Module 1."
   },
   {
     question: "In a FHIRPath expression used within an SDC Questionnaire, what does `%resource` typically refer to?",
@@ -691,7 +725,8 @@ const quizQuestions = [
       "The Patient resource associated with the form",
       "The structure definition of the Questionnaire"
     ],
-    answer: 1
+    answer: 1,
+    explanation: "%resource refers to the QuestionnaireResponse being authored. Other SDC variables include %questionnaire, %qitem, and launch context variables like %patient. See Module 3."
   },
   {
     question: "Which extension is used to specify that a Questionnaire item should be hidden until a specific condition is met?",
@@ -701,7 +736,8 @@ const quizQuestions = [
       "variable",
       "itemControl"
     ],
-    answer: 0
+    answer: 0,
+    explanation: "enableWhen conditions control item visibility based on answers to other questions. enableWhenExpression offers a FHIRPath alternative for complex logic. See Module 4."
   },
   {
     question: "How are `linkId` elements used effectively in a QuestionnaireResponse?",
@@ -711,7 +747,8 @@ const quizQuestions = [
       "They must uniquely correspond to the `linkId` of the items in the defining Questionnaire to map answers back to questions",
       "They are automatically generated hashes used for security"
     ],
-    answer: 2
+    answer: 2,
+    explanation: "linkId values must be unique within a Questionnaire and are used to map QuestionnaireResponse answers back to their defining question items. See Module 1."
   },
   {
     question: "Which SDC extension controls the UI widget type (e.g., radio buttons vs dropdown) for a Questionnaire item?",
@@ -721,7 +758,8 @@ const quizQuestions = [
       "entryFormat",
       "displayCategory"
     ],
-    answer: 1
+    answer: 1,
+    explanation: "The questionnaire-itemControl extension specifies the UI widget type — radio-button, drop-down, slider, autocomplete, check-box, etc. See Module 2."
   },
   {
     question: "What is the purpose of the `rendering-xhtml` extension in SDC?",
@@ -731,7 +769,8 @@ const quizQuestions = [
       "To provide rich XHTML content instead of plain text for item display",
       "To set the widget type for rendering"
     ],
-    answer: 2
+    answer: 2,
+    explanation: "rendering-xhtml provides rich HTML content instead of plain text for item labels/instructions, enabling formatted text display. See Module 2."
   },
   {
     question: "When multiple `enableWhen` conditions exist on an item, what does `enableBehavior: 'any'` mean?",
@@ -741,7 +780,8 @@ const quizQuestions = [
       "The conditions are evaluated randomly",
       "The item is always visible regardless of conditions"
     ],
-    answer: 1
+    answer: 1,
+    explanation: "enableBehavior 'any' means at least one condition must be true (OR logic). 'all' means every condition must be true (AND logic). See Module 4."
   },
   {
     question: "Which SDC extension assigns numeric scoring weights to answer options (e.g., for PHQ-9)?",
@@ -751,7 +791,8 @@ const quizQuestions = [
       "answerExpression",
       "targetConstraint"
     ],
-    answer: 1
+    answer: 1,
+    explanation: "ordinalValue (itemWeight) assigns numeric weights to answer codings, enabling standardized scoring like PHQ-9 and GAD-7. See Module 4."
   },
   {
     question: "What is the key difference between `calculatedExpression` and `initialExpression`?",
@@ -761,7 +802,8 @@ const quizQuestions = [
       "calculatedExpression is continuously re-evaluated as the form changes; initialExpression is evaluated once at form load",
       "initialExpression can only use CQL, not FHIRPath"
     ],
-    answer: 2
+    answer: 2,
+    explanation: "calculatedExpression is re-evaluated continuously as the form changes; initialExpression is evaluated only once when the form is first opened. See Module 4."
   },
   {
     question: "Which SDC population method uses `observationLinkPeriod` to automatically pre-fill items from recent Observations?",
@@ -771,7 +813,8 @@ const quizQuestions = [
       "Observation-based population",
       "Template-based population"
     ],
-    answer: 2
+    answer: 2,
+    explanation: "Observation-based population uses observationLinkPeriod to automatically pre-fill items from recent Observations matching the item's code. See Module 5."
   },
   {
     question: "What does the `launchContext` extension declare in an SDC Questionnaire?",
@@ -781,7 +824,8 @@ const quizQuestions = [
       "The default locale for form rendering",
       "The list of required user permissions"
     ],
-    answer: 1
+    answer: 1,
+    explanation: "launchContext declares named context variables (%patient, %encounter, %user) that the form filler must supply when launching the form. See Module 5."
   },
   {
     question: "In observation-based extraction, which extension flags an item for extraction as a FHIR Observation?",
@@ -791,7 +835,8 @@ const quizQuestions = [
       "sdc-questionnaire-observationExtract",
       "definition"
     ],
-    answer: 2
+    answer: 2,
+    explanation: "sdc-questionnaire-observationExtract flags an item so that its answer is extracted as a FHIR Observation resource. See Module 6."
   },
   {
     question: "Definition-based extraction maps items to target resources using which Questionnaire item property?",
@@ -801,7 +846,8 @@ const quizQuestions = [
       "answerValueSet",
       "extension.url"
     ],
-    answer: 1
+    answer: 1,
+    explanation: "Definition-based extraction uses the item's definition URL pointing to a StructureDefinition element to map answers to resource properties. See Module 6."
   },
   {
     question: "What SDC operation assembles a modular Questionnaire with sub-questionnaire references into a flat form?",
@@ -811,7 +857,8 @@ const quizQuestions = [
       "$assemble",
       "$next-question"
     ],
-    answer: 2
+    answer: 2,
+    explanation: "$assemble takes a modular Questionnaire with subQuestionnaire references and inlines all sub-questionnaires into a single flat form. See Module 7."
   },
   {
     question: "In a modular form, which item type carries the `subQuestionnaire` extension?",
@@ -821,7 +868,8 @@ const quizQuestions = [
       "display",
       "choice"
     ],
-    answer: 2
+    answer: 2,
+    explanation: "A display-type item carries the subQuestionnaire extension. At assembly time, it is replaced by the items from the referenced sub-questionnaire. See Module 7."
   },
   {
     question: "How does the adaptive form `$next-question` operation work?",
@@ -831,7 +879,8 @@ const quizQuestions = [
       "The server sends all questions in random order",
       "It only works with paper forms"
     ],
-    answer: 1
+    answer: 1,
+    explanation: "$next-question is an iterative operation: the form filler sends answered items and the server returns the next question(s) based on scoring logic. See Module 8."
   },
   {
     question: "What is Computerized Adaptive Testing (CAT) in the context of SDC adaptive forms?",
@@ -841,7 +890,8 @@ const quizQuestions = [
       "A technique to compress questionnaires for faster download",
       "A way to automatically generate enableWhen conditions"
     ],
-    answer: 1
+    answer: 1,
+    explanation: "CAT uses Item Response Theory (IRT) to select questions that maximize measurement precision based on prior answers, reducing the number of questions needed. See Module 8."
   },
   {
     question: "Which SDC system role is responsible for rendering forms, supporting population, and capturing responses?",
@@ -851,7 +901,8 @@ const quizQuestions = [
       "Form Filler",
       "Form Archiver"
     ],
-    answer: 2
+    answer: 2,
+    explanation: "The Form Filler is the client application that renders forms, supports population, captures user responses, and submits them. See Module 9."
   },
   {
     question: "Which of these is NOT one of the four SDC extraction methods?",
@@ -861,7 +912,8 @@ const quizQuestions = [
       "CQL-based",
       "Template-based"
     ],
-    answer: 2
+    answer: 2,
+    explanation: "The four SDC extraction methods are: Observation-based, Definition-based, StructureMap-based, and Template-based. CQL is an expression language, not an extraction method. See Module 6."
   },
 ]
 
@@ -1149,6 +1201,18 @@ function updateGeneratedResponse(nextResponse) {
 
 function goToStep(tabId) {
   activeTab.value = tabId
+}
+
+function tryInPlayground(snippet) {
+  // Load a JSON snippet into the playground and navigate there
+  try {
+    const parsed = JSON.parse(snippet)
+    pgJson.value = JSON.stringify(parsed, null, 2)
+  } catch {
+    pgJson.value = snippet
+  }
+  pgSelectedTemplate.value = 'blank'
+  activeTab.value = 'playground'
 }
 
 function goToNextStep() {
@@ -1476,13 +1540,49 @@ function buildExtractionBundle(response) {
         
         <!-- MODULE 0: INTRO (Dynamic) -->
         <div v-if="activeTab === 'intro'" class="card" style="max-width: 800px; margin: 0 auto;">
-          <h2>{{ learningModules.intro.title }}</h2>
-          <div v-for="(section, idx) in learningModules.intro.sections" :key="idx" style="margin-bottom: 2rem;">
-             <h3 style="margin-bottom: 0.5rem;">{{ section.title }}</h3>
-             <p style="white-space: pre-line; color: var(--c-text-primary);">{{ section.content }}</p>
+          <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;">
+            <h2 style="margin: 0;">{{ learningModules.intro.title }}</h2>
+            <a :href="learningModules.intro.specUrl" target="_blank" rel="noopener" class="spec-link">📖 Official HL7 SDC IG</a>
           </div>
 
-          <div class="flow-grid" style="display:grid; gap:1rem; grid-template-columns: repeat(2, 1fr); margin-top:3rem;">
+          <!-- SDC Lifecycle Diagram -->
+          <div class="lifecycle-diagram">
+            <template v-for="(step, sIdx) in [
+              { icon: '✏️', label: 'Author', sub: 'Design & publish', bg: '#dbeafe', color: '#1e40af' },
+              { icon: '🔍', label: 'Find', sub: 'Search & discover', bg: '#e0e7ff', color: '#3730a3' },
+              { icon: '🎨', label: 'Render', sub: 'Present form UI', bg: '#fce7f3', color: '#9d174d' },
+              { icon: '📥', label: 'Populate', sub: 'Pre-fill answers', bg: '#dcfce7', color: '#166534' },
+              { icon: '⚙️', label: 'Behave', sub: 'Logic & scoring', bg: '#fef3c7', color: '#92400e' },
+              { icon: '📝', label: 'Complete', sub: 'User fills form', bg: '#f3e8ff', color: '#6b21a8' },
+              { icon: '📤', label: 'Extract', sub: 'Create resources', bg: '#ffedd5', color: '#9a3412' },
+            ]" :key="sIdx">
+              <div class="lifecycle-step">
+                <div class="lifecycle-icon" :style="{ background: step.bg, color: step.color }">{{ step.icon }}</div>
+                <div class="lifecycle-label">{{ step.label }}</div>
+                <div class="lifecycle-sublabel">{{ step.sub }}</div>
+              </div>
+              <div v-if="sIdx < 6" class="lifecycle-arrow">→</div>
+            </template>
+          </div>
+
+          <!-- Collapsible sections with markdown rendering -->
+          <div v-for="(section, idx) in learningModules.intro.sections" :key="idx" class="accordion-section">
+            <button class="accordion-header" @click="toggleSection('intro', idx)">
+              <span class="accordion-chevron" :class="{ open: isSectionOpen('intro', idx) }">▶</span>
+              {{ section.title }}
+            </button>
+            <div v-if="isSectionOpen('intro', idx)" class="accordion-body">
+              <div class="md-content" v-html="renderMarkdown(section.content)"></div>
+            </div>
+          </div>
+
+          <!-- Progress indicator -->
+          <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 2rem; margin-bottom: 1rem;">
+            <span style="font-size: 0.8rem; color: var(--c-text-secondary); font-weight: 600;">Your Progress:</span>
+            <div v-for="tab in tabs" :key="tab.id" class="progress-dot" :class="{ visited: visitedModules.has(tab.id) }" :title="tab.label"></div>
+          </div>
+
+          <div class="flow-grid" style="display:grid; gap:1rem; grid-template-columns: repeat(2, 1fr); margin-top:1rem;">
             <div 
               v-for="(tab, index) in tabs.slice(1)" 
               :key="tab.id" 
@@ -1490,7 +1590,10 @@ function buildExtractionBundle(response) {
               @click="goToStep(tab.id)"
               style="cursor:pointer; border-color:var(--c-border);"
             >
-               <p style="font-size:0.75rem; color: #94a3b8; margin:0">Next Up</p>
+               <div style="display: flex; align-items: center; gap: 0.5rem;">
+                 <div class="progress-dot" :class="{ visited: visitedModules.has(tab.id) }"></div>
+                 <p style="font-size:0.75rem; color: #94a3b8; margin:0">{{ visitedModules.has(tab.id) ? '✓ Visited' : 'Next Up' }}</p>
+               </div>
                <h4 style="margin:0.25rem 0">{{ tab.label }}</h4>
                <p style="font-size:0.9rem; margin:0">{{ tab.goal }}</p>
             </div>
@@ -1619,11 +1722,11 @@ function buildExtractionBundle(response) {
                     <strong>Logic:</strong> {{ learningModules.logic.sections[0].content }}
                 </div>
                  <div class="pane-body">
-                    <textarea 
-                       v-model="fhirPathExpression" 
-                       class="editor" 
-                       style="width: 100%; height: 100%; border: none; padding: 1rem; font-family: monospace; resize: none; outline: none;" 
+                    <FhirPathEditor
+                       :model-value="fhirPathExpression"
+                       @update:model-value="fhirPathExpression = $event"
                        placeholder="e.g. item.where(linkId='q1').answer.valueString"
+                       style="height: 100%;"
                     />
                  </div>
               </div>
@@ -1658,10 +1761,19 @@ function buildExtractionBundle(response) {
 
         <!-- MODULE 4: BEHAVIOR -->
         <div v-if="activeTab === 'behavior'" class="card" style="max-width: 900px; margin: 0 auto;">
-          <h2>{{ learningModules.behavior.title }}</h2>
-          <div v-for="(section, idx) in learningModules.behavior.sections" :key="idx" style="margin-bottom: 2rem;">
-            <h3 style="margin-bottom: 0.5rem;">{{ section.title }}</h3>
-            <p style="white-space: pre-line; color: var(--c-text-primary);">{{ section.content }}</p>
+          <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;">
+            <h2 style="margin: 0;">{{ learningModules.behavior.title }}</h2>
+            <a :href="learningModules.behavior.specUrl" target="_blank" rel="noopener" class="spec-link">📖 HL7 Spec</a>
+          </div>
+
+          <div v-for="(section, idx) in learningModules.behavior.sections" :key="idx" class="accordion-section">
+            <button class="accordion-header" @click="toggleSection('behavior', idx)">
+              <span class="accordion-chevron" :class="{ open: isSectionOpen('behavior', idx) }">▶</span>
+              {{ section.title }}
+            </button>
+            <div v-if="isSectionOpen('behavior', idx)" class="accordion-body">
+              <div class="md-content" v-html="renderMarkdown(section.content)"></div>
+            </div>
           </div>
 
           <hr style="margin: 2rem 0; border-color: var(--c-border);" />
@@ -1673,16 +1785,26 @@ function buildExtractionBundle(response) {
               <h5>{{ example.title }}</h5>
               <p class="hint-text" style="margin-bottom: 0.5rem;">{{ example.description }}</p>
               <pre class="code-output" style="font-size: 0.75rem; max-height: 250px; overflow: auto;">{{ example.snippet }}</pre>
+              <button class="btn btn-sm" style="margin-top: 0.5rem;" @click="tryInPlayground(example.snippet)">🧪 Try in Playground</button>
             </article>
           </div>
         </div>
 
         <!-- MODULE 5: POPULATION -->
         <div v-if="activeTab === 'population'" class="card" style="max-width: 900px; margin: 0 auto;">
-          <h2>{{ learningModules.population.title }}</h2>
-          <div v-for="(section, idx) in learningModules.population.sections" :key="idx" style="margin-bottom: 2rem;">
-            <h3 style="margin-bottom: 0.5rem;">{{ section.title }}</h3>
-            <p style="white-space: pre-line; color: var(--c-text-primary);">{{ section.content }}</p>
+          <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;">
+            <h2 style="margin: 0;">{{ learningModules.population.title }}</h2>
+            <a :href="learningModules.population.specUrl" target="_blank" rel="noopener" class="spec-link">📖 HL7 Spec</a>
+          </div>
+
+          <div v-for="(section, idx) in learningModules.population.sections" :key="idx" class="accordion-section">
+            <button class="accordion-header" @click="toggleSection('population', idx)">
+              <span class="accordion-chevron" :class="{ open: isSectionOpen('population', idx) }">▶</span>
+              {{ section.title }}
+            </button>
+            <div v-if="isSectionOpen('population', idx)" class="accordion-body">
+              <div class="md-content" v-html="renderMarkdown(section.content)"></div>
+            </div>
           </div>
 
           <hr style="margin: 2rem 0; border-color: var(--c-border);" />
@@ -1703,16 +1825,26 @@ function buildExtractionBundle(response) {
               </div>
               <p class="hint-text" style="margin-bottom: 0.5rem;">{{ example.description }}</p>
               <pre class="code-output" style="font-size: 0.75rem; max-height: 300px; overflow: auto;">{{ example.snippet }}</pre>
+              <button class="btn btn-sm" style="margin-top: 0.5rem;" @click="tryInPlayground(example.snippet)">🧪 Try in Playground</button>
             </article>
           </div>
         </div>
 
         <!-- MODULE 6: EXTRACTION -->
         <div v-if="activeTab === 'extraction'" class="card" style="max-width: 900px; margin: 0 auto;">
-          <h2>{{ learningModules.extraction.title }}</h2>
-          <div v-for="(section, idx) in learningModules.extraction.sections" :key="idx" style="margin-bottom: 2rem;">
-            <h3 style="margin-bottom: 0.5rem;">{{ section.title }}</h3>
-            <p style="white-space: pre-line; color: var(--c-text-primary);">{{ section.content }}</p>
+          <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;">
+            <h2 style="margin: 0;">{{ learningModules.extraction.title }}</h2>
+            <a :href="learningModules.extraction.specUrl" target="_blank" rel="noopener" class="spec-link">📖 HL7 Spec</a>
+          </div>
+
+          <div v-for="(section, idx) in learningModules.extraction.sections" :key="idx" class="accordion-section">
+            <button class="accordion-header" @click="toggleSection('extraction', idx)">
+              <span class="accordion-chevron" :class="{ open: isSectionOpen('extraction', idx) }">▶</span>
+              {{ section.title }}
+            </button>
+            <div v-if="isSectionOpen('extraction', idx)" class="accordion-body">
+              <div class="md-content" v-html="renderMarkdown(section.content)"></div>
+            </div>
           </div>
 
           <hr style="margin: 2rem 0; border-color: var(--c-border);" />
@@ -1733,6 +1865,7 @@ function buildExtractionBundle(response) {
               </div>
               <p class="hint-text" style="margin-bottom: 0.5rem;">{{ example.description }}</p>
               <pre class="code-output" style="font-size: 0.75rem; max-height: 300px; overflow: auto;">{{ example.snippet }}</pre>
+              <button class="btn btn-sm" style="margin-top: 0.5rem;" @click="tryInPlayground(example.snippet)">🧪 Try in Playground</button>
             </article>
           </div>
 
@@ -1751,10 +1884,19 @@ function buildExtractionBundle(response) {
 
         <!-- MODULE 7: MODULAR FORMS -->
         <div v-if="activeTab === 'modular'" class="card" style="max-width: 900px; margin: 0 auto;">
-          <h2>{{ learningModules.modular.title }}</h2>
-          <div v-for="(section, idx) in learningModules.modular.sections" :key="idx" style="margin-bottom: 2rem;">
-            <h3 style="margin-bottom: 0.5rem;">{{ section.title }}</h3>
-            <p style="white-space: pre-line; color: var(--c-text-primary);">{{ section.content }}</p>
+          <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;">
+            <h2 style="margin: 0;">{{ learningModules.modular.title }}</h2>
+            <a :href="learningModules.modular.specUrl" target="_blank" rel="noopener" class="spec-link">📖 HL7 Spec</a>
+          </div>
+
+          <div v-for="(section, idx) in learningModules.modular.sections" :key="idx" class="accordion-section">
+            <button class="accordion-header" @click="toggleSection('modular', idx)">
+              <span class="accordion-chevron" :class="{ open: isSectionOpen('modular', idx) }">▶</span>
+              {{ section.title }}
+            </button>
+            <div v-if="isSectionOpen('modular', idx)" class="accordion-body">
+              <div class="md-content" v-html="renderMarkdown(section.content)"></div>
+            </div>
           </div>
 
           <hr style="margin: 2rem 0; border-color: var(--c-border);" />
@@ -1789,16 +1931,26 @@ function buildExtractionBundle(response) {
               <h5>{{ example.title }}</h5>
               <p class="hint-text" style="margin-bottom: 0.5rem;">{{ example.description }}</p>
               <pre class="code-output" style="font-size: 0.75rem; max-height: 300px; overflow: auto;">{{ example.snippet }}</pre>
+              <button class="btn btn-sm" style="margin-top: 0.5rem;" @click="tryInPlayground(example.snippet)">🧪 Try in Playground</button>
             </article>
           </div>
         </div>
 
         <!-- MODULE 8: ADAPTIVE FORMS -->
         <div v-if="activeTab === 'adaptive'" class="card" style="max-width: 900px; margin: 0 auto;">
-          <h2>{{ learningModules.adaptive.title }}</h2>
-          <div v-for="(section, idx) in learningModules.adaptive.sections" :key="idx" style="margin-bottom: 2rem;">
-            <h3 style="margin-bottom: 0.5rem;">{{ section.title }}</h3>
-            <p style="white-space: pre-line; color: var(--c-text-primary);">{{ section.content }}</p>
+          <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;">
+            <h2 style="margin: 0;">{{ learningModules.adaptive.title }}</h2>
+            <a :href="learningModules.adaptive.specUrl" target="_blank" rel="noopener" class="spec-link">📖 HL7 Spec</a>
+          </div>
+
+          <div v-for="(section, idx) in learningModules.adaptive.sections" :key="idx" class="accordion-section">
+            <button class="accordion-header" @click="toggleSection('adaptive', idx)">
+              <span class="accordion-chevron" :class="{ open: isSectionOpen('adaptive', idx) }">▶</span>
+              {{ section.title }}
+            </button>
+            <div v-if="isSectionOpen('adaptive', idx)" class="accordion-body">
+              <div class="md-content" v-html="renderMarkdown(section.content)"></div>
+            </div>
           </div>
 
           <hr style="margin: 2rem 0; border-color: var(--c-border);" />
@@ -1831,16 +1983,26 @@ function buildExtractionBundle(response) {
               <h5>{{ example.title }}</h5>
               <p class="hint-text" style="margin-bottom: 0.5rem;">{{ example.description }}</p>
               <pre class="code-output" style="font-size: 0.75rem; max-height: 300px; overflow: auto;">{{ example.snippet }}</pre>
+              <button class="btn btn-sm" style="margin-top: 0.5rem;" @click="tryInPlayground(example.snippet)">🧪 Try in Playground</button>
             </article>
           </div>
         </div>
 
         <!-- MODULE 9: WORKFLOW & CONFORMANCE -->
         <div v-if="activeTab === 'workflow'" class="card" style="max-width: 900px; margin: 0 auto;">
-          <h2>{{ learningModules.workflow.title }}</h2>
-          <div v-for="(section, idx) in learningModules.workflow.sections" :key="idx" style="margin-bottom: 2rem;">
-            <h3 style="margin-bottom: 0.5rem;">{{ section.title }}</h3>
-            <p style="white-space: pre-line; color: var(--c-text-primary);">{{ section.content }}</p>
+          <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;">
+            <h2 style="margin: 0;">{{ learningModules.workflow.title }}</h2>
+            <a :href="learningModules.workflow.specUrl" target="_blank" rel="noopener" class="spec-link">📖 HL7 Spec</a>
+          </div>
+
+          <div v-for="(section, idx) in learningModules.workflow.sections" :key="idx" class="accordion-section">
+            <button class="accordion-header" @click="toggleSection('workflow', idx)">
+              <span class="accordion-chevron" :class="{ open: isSectionOpen('workflow', idx) }">▶</span>
+              {{ section.title }}
+            </button>
+            <div v-if="isSectionOpen('workflow', idx)" class="accordion-body">
+              <div class="md-content" v-html="renderMarkdown(section.content)"></div>
+            </div>
           </div>
 
           <hr style="margin: 2rem 0; border-color: var(--c-border);" />
@@ -2135,7 +2297,7 @@ function buildExtractionBundle(response) {
         <!-- QUIZ (Interactive) -->
         <div v-if="activeTab === 'quiz'" class="card" style="max-width: 800px; margin: 0 auto;">
            <h2>Knowledge Check</h2>
-           <p class="hint-text" style="margin-bottom: 2rem;">Test your mastery of SDC concepts.</p>
+           <p class="hint-text" style="margin-bottom: 2rem;">Test your mastery of SDC concepts. {{ quizQuestions.length }} questions covering all modules.</p>
            
            <div v-if="!quizSubmitted">
               <div v-for="(q, idx) in quizQuestions" :key="idx" style="margin-bottom: 2rem; padding-bottom: 1rem; border-bottom: 1px solid var(--c-border);">
@@ -2151,12 +2313,35 @@ function buildExtractionBundle(response) {
               <button class="btn btn-primary" @click="submitQuiz">Submit Quiz</button>
            </div>
            
-           <div v-else style="text-align: center; padding: 2rem;">
-              <h3 style="margin-bottom: 1rem;">Results</h3>
-              <div style="font-size: 3rem; font-weight: bold; color: var(--c-accent);">{{ quizPercentage }}%</div>
-              <p style="margin-bottom: 2rem;">You scored {{ quizScore }} out of {{ quizQuestions.length }}.</p>
+           <div v-else>
+              <div style="text-align: center; padding: 1.5rem; margin-bottom: 2rem; background: var(--c-bg-pane-header); border-radius: 10px;">
+                <div style="font-size: 3rem; font-weight: bold; color: var(--c-accent);">{{ quizPercentage }}%</div>
+                <p style="margin-bottom: 0.5rem;">You scored {{ quizScore }} out of {{ quizQuestions.length }}.</p>
+                <p v-if="quizPercentage >= 80" style="color: var(--c-success); font-weight: 600;">🎉 Excellent! You have a strong understanding of SDC.</p>
+                <p v-else-if="quizPercentage >= 50" style="color: #d97706; font-weight: 600;">📚 Good effort! Review the modules linked below to improve.</p>
+                <p v-else style="color: var(--c-danger); font-weight: 600;">🔄 Keep learning! Review each module and try again.</p>
+                <button class="btn btn-sm" style="margin-top: 0.75rem;" @click="resetQuiz">Try Again</button>
+              </div>
               
-              <button class="btn btn-sm" @click="resetQuiz">Try Again</button>
+              <h3 style="margin-bottom: 1rem;">Answer Review</h3>
+              <div v-for="(q, idx) in quizQuestions" :key="idx" style="margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid var(--c-border);">
+                <p style="font-weight: 600; margin-bottom: 0.5rem;">
+                  <span :style="{ color: quizAnswers[idx] === q.answer ? 'var(--c-success)' : 'var(--c-danger)' }">
+                    {{ quizAnswers[idx] === q.answer ? '✓' : '✗' }}
+                  </span>
+                  {{ idx + 1 }}. {{ q.question }}
+                </p>
+                <div v-if="quizAnswers[idx] !== q.answer" class="quiz-answer-review incorrect">
+                  <div><strong>Your answer:</strong> {{ q.options[quizAnswers[idx]] || '(not answered)' }}</div>
+                  <div><strong>Correct answer:</strong> {{ q.options[q.answer] }}</div>
+                </div>
+                <div v-else class="quiz-answer-review correct">
+                  <strong>Correct!</strong> {{ q.options[q.answer] }}
+                </div>
+                <div v-if="q.explanation" style="margin-top: 0.5rem; padding: 0.5rem 0.75rem; background: var(--c-accent-light); border-radius: 6px; font-size: 0.85rem; color: var(--c-text-secondary);">
+                  💡 {{ q.explanation }}
+                </div>
+              </div>
            </div>
         </div>
         
