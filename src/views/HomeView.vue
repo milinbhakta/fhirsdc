@@ -1935,6 +1935,7 @@ function buildExtractionBundle(response) {
               <div class="pane-header">
                 <span>Questionnaire JSON</span>
                 <div style="display: flex; align-items: center; gap: 0.5rem;">
+                  <button class="btn btn-sm" @click="formatPgJson" title="Format JSON (Shift+Alt+F)">Format</button>
                   <span v-if="pgParsed.error" style="color: var(--c-danger); font-size: 0.75rem;">Invalid JSON</span>
                   <span v-else style="color: var(--c-success); font-size: 0.75rem;">Valid</span>
                 </div>
