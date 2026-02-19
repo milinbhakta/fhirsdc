@@ -463,6 +463,66 @@ const playgroundTemplates = [
       ],
     },
   },
+  {
+    id: 'observation-extract',
+    label: 'Population & Extraction',
+    json: {
+      resourceType: 'Questionnaire',
+      id: 'obs-extract-demo',
+      status: 'active',
+      title: 'Observation Extraction Demo',
+      item: [
+        {
+          linkId: 'weight',
+          text: 'Body weight (kg)',
+          type: 'decimal',
+          code: [{ system: 'http://loinc.org', code: '29463-7', display: 'Body weight' }],
+          extension: [
+            { url: 'http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-observationExtract', valueBoolean: true },
+            { url: 'http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-observationLinkPeriod', valueDuration: { value: 1, unit: 'year', system: 'http://unitsofmeasure.org', code: 'a' } },
+          ],
+        },
+        {
+          linkId: 'height',
+          text: 'Height (cm)',
+          type: 'decimal',
+          code: [{ system: 'http://loinc.org', code: '8302-2', display: 'Body height' }],
+          extension: [
+            { url: 'http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-observationExtract', valueBoolean: true },
+          ],
+        },
+        {
+          linkId: 'systolic',
+          text: 'Systolic BP (mmHg)',
+          type: 'integer',
+          code: [{ system: 'http://loinc.org', code: '8480-6', display: 'Systolic blood pressure' }],
+          extension: [
+            { url: 'http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-observationExtract', valueBoolean: true },
+          ],
+        },
+        {
+          linkId: 'patient-name',
+          text: 'Patient name (from context)',
+          type: 'string',
+          readOnly: true,
+          extension: [{
+            url: 'http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression',
+            valueExpression: {
+              language: 'text/fhirpath',
+              expression: "%patient.name.where(use='official').given.first() + ' ' + %patient.name.where(use='official').family",
+            },
+          }],
+        },
+        {
+          linkId: 'today',
+          text: 'Today',
+          type: 'date',
+          readOnly: true,
+          initial: [{ valueDate: new Date().toISOString().slice(0, 10) }],
+        },
+      ],
+    },
+  },
 ]
 
 const pgSelectedTemplate = ref('blank')
@@ -511,13 +571,15 @@ const pgUploadLoading = ref(false)
 const pgUploadResult = ref('')
 
 // ── Populate & Extract State ──
-const pgPopulateLoading = ref(false)
 const pgPopulateResult = ref(null)
 const pgPopulateError = ref('')
 const pgPopulateSubject = ref('Patient/example')
-const pgExtractLoading = ref(false)
+const pgPopulateMode = ref('client') // 'client' | 'server'
+const pgPopulateServerLoading = ref(false)
 const pgExtractResult = ref(null)
 const pgExtractError = ref('')
+const pgExtractMode = ref('client') // 'client' | 'server'
+const pgExtractServerLoading = ref(false)
 
 const hasActiveServer = computed(() => !!serverStatus.value.fhir)
 
@@ -584,14 +646,93 @@ function pgRunFhirPath() {
 watch(pgFhirPathExpr, () => { pgRunFhirPath() })
 watch(pgGeneratedResponse, () => { pgRunFhirPath() })
 
-// ── Populate: call $populate on the server ──
-async function pgPopulate() {
+// ── Client-Side Population ──
+// Walk Questionnaire items, apply initial[] values and evaluate initialExpression,
+// produce a pre-filled QuestionnaireResponse — no server needed.
+function pgPopulateClient() {
+  pgPopulateError.value = ''
+  pgPopulateResult.value = null
+  pgOutputTab.value = 'populate'
+  try {
+    const q = JSON.parse(pgJson.value)
+    if (q.resourceType !== 'Questionnaire') throw new Error('Editor JSON is not a Questionnaire')
+
+    // Mock patient context for initialExpression evaluation
+    const mockPatient = {
+      resourceType: 'Patient', id: 'example',
+      name: [{ use: 'official', family: 'Smith', given: ['Jane'] }],
+      birthDate: '1990-01-15', gender: 'female',
+      telecom: [{ system: 'phone', value: '+1-555-0100' }],
+      address: [{ city: 'Austin', state: 'TX', postalCode: '73301' }],
+    }
+    const envVars = { patient: mockPatient, context: mockPatient }
+
+    function populateItems(itemList) {
+      if (!itemList?.length) return []
+      const out = []
+      for (const item of itemList) {
+        if (item.type === 'group') {
+          const childItems = populateItems(item.item ?? [])
+          if (childItems.length) out.push({ linkId: item.linkId, item: childItems })
+          continue
+        }
+        if (item.type === 'display') continue
+
+        // 1. Try initial[] values
+        if (item.initial?.length) {
+          out.push({ linkId: item.linkId, answer: item.initial.map(v => ({ ...v })) })
+          continue
+        }
+
+        // 2. Try initialExpression extension
+        const initExpr = (item.extension ?? []).find(e =>
+          e.url === 'http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression'
+        )
+        if (initExpr?.valueExpression?.expression) {
+          try {
+            const result = fhirpath.evaluate(mockPatient, initExpr.valueExpression.expression, envVars, r4Model)
+            if (result.length) {
+              const val = result[0]
+              let answer = {}
+              if (typeof val === 'string') answer.valueString = val
+              else if (typeof val === 'number') {
+                answer = Number.isInteger(val) ? { valueInteger: val } : { valueDecimal: val }
+              } else if (typeof val === 'boolean') answer.valueBoolean = val
+              else if (val instanceof Date || (typeof val === 'string' && /^\d{4}-\d{2}/.test(val))) answer.valueDate = String(val)
+              else answer.valueString = String(val)
+              out.push({ linkId: item.linkId, answer: [answer] })
+              continue
+            }
+          } catch { /* expression may fail with mock data — skip */ }
+        }
+      }
+      return out
+    }
+
+    const responseItems = populateItems(q.item ?? [])
+    pgPopulateResult.value = {
+      resourceType: 'QuestionnaireResponse',
+      questionnaire: q.url || q.id || 'Questionnaire/unknown',
+      status: 'in-progress',
+      authored: new Date().toISOString(),
+      subject: { reference: pgPopulateSubject.value || 'Patient/example' },
+      item: responseItems,
+      _populationMethod: 'client-side (initial + initialExpression)',
+      _mockPatient: mockPatient,
+    }
+  } catch (err) {
+    pgPopulateError.value = err.message
+  }
+}
+
+// ── Server-Side Population ──
+async function pgPopulateServer() {
   if (!hasActiveServer.value) {
     pgPopulateError.value = 'No FHIR server configured. Go to the FHIR Server tab to add one.'
     pgOutputTab.value = 'populate'
     return
   }
-  pgPopulateLoading.value = true
+  pgPopulateServerLoading.value = true
   pgPopulateError.value = ''
   pgPopulateResult.value = null
   pgOutputTab.value = 'populate'
@@ -609,11 +750,116 @@ async function pgPopulate() {
   } catch (err) {
     pgPopulateError.value = err.message
   }
-  pgPopulateLoading.value = false
+  pgPopulateServerLoading.value = false
 }
 
-// ── Extract: call $extract on the server ──
-async function pgExtract() {
+function pgPopulate() {
+  pgOutputTab.value = 'populate'
+  if (pgPopulateMode.value === 'server') pgPopulateServer()
+  else pgPopulateClient()
+}
+
+// ── Client-Side Extraction ──
+// Walk QuestionnaireResponse + Questionnaire items, extract Observations for items
+// with observationExtract extension or code. Also handle definition-based extraction.
+function pgExtractClient() {
+  pgExtractError.value = ''
+  pgExtractResult.value = null
+  pgOutputTab.value = 'extract'
+  try {
+    if (!pgGeneratedResponse.value) throw new Error('No QuestionnaireResponse — fill the form first.')
+    const q = JSON.parse(pgJson.value)
+    if (q.resourceType !== 'Questionnaire') throw new Error('Editor JSON is not a Questionnaire')
+    const qr = pgGeneratedResponse.value
+
+    // Build a linkId→item map for the Questionnaire
+    const qItemMap = {}
+    function indexQ(items) {
+      for (const item of items ?? []) {
+        qItemMap[item.linkId] = item
+        if (item.item) indexQ(item.item)
+      }
+    }
+    indexQ(q.item)
+
+    const entries = []
+    const subjectRef = qr.subject?.reference || pgPopulateSubject.value || 'Patient/example'
+
+    function walkResponse(respItems) {
+      for (const ri of respItems ?? []) {
+        if (ri.item) { walkResponse(ri.item); continue }
+        const qItem = qItemMap[ri.linkId]
+        if (!qItem || !ri.answer?.length) continue
+
+        // Check for observationExtract extension
+        const hasObsExtract = (qItem.extension ?? []).some(e =>
+          e.url === 'http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-observationExtract' && e.valueBoolean === true
+        )
+
+        // Extract if item has code[] or observationExtract
+        if (qItem.code?.length || hasObsExtract) {
+          const code = qItem.code?.[0] || { code: ri.linkId, display: qItem.text || ri.linkId }
+          const answer = ri.answer[0]
+
+          // Build Observation value[x]
+          let valueKey, valueVal
+          if (answer.valueInteger !== undefined) { valueKey = 'valueQuantity'; valueVal = { value: answer.valueInteger, unit: qItem.text || '' } }
+          else if (answer.valueDecimal !== undefined) { valueKey = 'valueQuantity'; valueVal = { value: answer.valueDecimal, unit: qItem.text || '' } }
+          else if (answer.valueString !== undefined) { valueKey = 'valueString'; valueVal = answer.valueString }
+          else if (answer.valueBoolean !== undefined) { valueKey = 'valueBoolean'; valueVal = answer.valueBoolean }
+          else if (answer.valueDate !== undefined) { valueKey = 'valueDateTime'; valueVal = answer.valueDate }
+          else if (answer.valueCoding) { valueKey = 'valueCodeableConcept'; valueVal = { coding: [answer.valueCoding], text: answer.valueCoding.display || answer.valueCoding.code } }
+          else continue
+
+          const obs = {
+            resourceType: 'Observation',
+            status: 'final',
+            code: { coding: [code], text: code.display || code.code },
+            subject: { reference: subjectRef },
+            effectiveDateTime: qr.authored || new Date().toISOString(),
+            [valueKey]: valueVal,
+          }
+          entries.push({ resource: obs, request: { method: 'POST', url: 'Observation' } })
+        }
+
+        // Definition-based extraction
+        if (qItem.definition) {
+          const answer = ri.answer[0]
+          entries.push({
+            resource: {
+              _extractionInfo: {
+                definition: qItem.definition,
+                linkId: ri.linkId,
+                text: qItem.text,
+                answer: answer,
+              },
+            },
+            request: { method: 'POST', url: qItem.definition.split('#')[0].split('/').pop() || 'Resource' },
+          })
+        }
+      }
+    }
+    walkResponse(qr.item)
+
+    if (!entries.length) {
+      pgExtractError.value = 'No extractable items found. Add code[] or the observationExtract extension to Questionnaire items to enable extraction. See the "How extraction works" section below.'
+      return
+    }
+
+    pgExtractResult.value = {
+      resourceType: 'Bundle',
+      type: 'transaction',
+      timestamp: new Date().toISOString(),
+      entry: entries,
+      _extractionMethod: 'client-side (observation-based + definition-based)',
+    }
+  } catch (err) {
+    pgExtractError.value = err.message
+  }
+}
+
+// ── Server-Side Extraction ──
+async function pgExtractServer() {
   if (!hasActiveServer.value) {
     pgExtractError.value = 'No FHIR server configured. Go to the FHIR Server tab to add one.'
     pgOutputTab.value = 'extract'
@@ -624,7 +870,7 @@ async function pgExtract() {
     pgOutputTab.value = 'extract'
     return
   }
-  pgExtractLoading.value = true
+  pgExtractServerLoading.value = true
   pgExtractError.value = ''
   pgExtractResult.value = null
   pgOutputTab.value = 'extract'
@@ -637,7 +883,13 @@ async function pgExtract() {
   } catch (err) {
     pgExtractError.value = err.message
   }
-  pgExtractLoading.value = false
+  pgExtractServerLoading.value = false
+}
+
+function pgExtract() {
+  pgOutputTab.value = 'extract'
+  if (pgExtractMode.value === 'server') pgExtractServer()
+  else pgExtractClient()
 }
 
 // ── Playground Mode ──
@@ -2335,11 +2587,11 @@ function buildExtractionBundle(response) {
                   <button class="btn btn-sm" :class="{ 'btn-primary': hasActiveServer }" @click="pgUploadToServer" :disabled="pgUploadLoading || pgParsed.error || !hasActiveServer" :title="hasActiveServer ? 'Upload to FHIR server' : 'No FHIR server configured — go to FHIR Server tab'">
                     {{ pgUploadLoading ? '⏳' : '☁️' }} Upload
                   </button>
-                  <button class="btn btn-sm" :class="{ 'btn-primary': hasActiveServer }" @click="pgPopulate" :disabled="pgPopulateLoading || pgParsed.error || !hasActiveServer" :title="hasActiveServer ? 'Pre-populate via $populate' : 'No FHIR server configured'">
-                    {{ pgPopulateLoading ? '⏳' : '📥' }} Populate
+                  <button class="btn btn-sm btn-primary" @click="pgPopulate" :disabled="pgParsed.error" title="Pre-populate form using initial values & expressions">
+                    📥 Populate
                   </button>
-                  <button class="btn btn-sm" :class="{ 'btn-primary': hasActiveServer }" @click="pgExtract" :disabled="pgExtractLoading || !pgGeneratedResponse || !hasActiveServer" :title="hasActiveServer ? 'Extract resources via $extract' : 'No FHIR server configured'">
-                    {{ pgExtractLoading ? '⏳' : '📤' }} Extract
+                  <button class="btn btn-sm btn-primary" @click="pgExtract" :disabled="!pgGeneratedResponse" title="Extract FHIR resources from form answers">
+                    📤 Extract
                   </button>
                   <span v-if="pgParsed.error" style="color: var(--c-danger); font-size: 0.75rem;">Invalid JSON</span>
                   <span v-else style="color: var(--c-success); font-size: 0.75rem;">Valid</span>
@@ -2414,59 +2666,126 @@ function buildExtractionBundle(response) {
 
               <!-- Populate -->
               <div v-if="pgOutputTab === 'populate'" class="pane-body" style="padding: 1.5rem; overflow: auto;">
-                <h4 style="margin: 0 0 0.75rem 0;">📥 Pre-Population ($populate)</h4>
+                <h4 style="margin: 0 0 0.75rem 0;">📥 Pre-Population</h4>
                 <p style="font-size: 0.85rem; color: var(--c-text-secondary); margin-bottom: 1rem;">
-                  Calls <code>Questionnaire/$populate</code> on the configured FHIR server to pre-fill a QuestionnaireResponse using the patient's existing data.
+                  Pre-fill a QuestionnaireResponse from <code>initial</code> values and <code>initialExpression</code> FHIRPath extensions.
                 </p>
-                <div style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 1rem; flex-wrap: wrap;">
-                  <label style="font-size: 0.8rem; font-weight: 600; white-space: nowrap;">Subject Reference:</label>
-                  <input v-model="pgPopulateSubject" class="input-select" style="font-size: 0.8rem; min-width: 200px; flex: 1; max-width: 320px;" placeholder="e.g. Patient/123" />
-                  <button class="btn btn-sm btn-primary" @click="pgPopulate" :disabled="pgPopulateLoading || pgParsed.error || !hasActiveServer">
-                    {{ pgPopulateLoading ? '⏳ Populating...' : '▶ Run $populate' }}
-                  </button>
+
+                <!-- Mode toggle -->
+                <div style="display: flex; gap: 0; margin-bottom: 1rem; border: 1px solid var(--c-border); border-radius: 6px; overflow: hidden; width: fit-content;">
+                  <button style="border: none; padding: 0.4rem 1rem; font-size: 0.8rem; font-weight: 600; cursor: pointer;"
+                    :style="{ background: pgPopulateMode === 'client' ? 'var(--c-accent)' : 'var(--c-bg-secondary)', color: pgPopulateMode === 'client' ? '#fff' : 'var(--c-text-secondary)' }"
+                    @click="pgPopulateMode = 'client'">🖥️ Client-Side</button>
+                  <button style="border: none; border-left: 1px solid var(--c-border); padding: 0.4rem 1rem; font-size: 0.8rem; font-weight: 600; cursor: pointer;"
+                    :style="{ background: pgPopulateMode === 'server' ? 'var(--c-accent)' : 'var(--c-bg-secondary)', color: pgPopulateMode === 'server' ? '#fff' : 'var(--c-text-secondary)' }"
+                    @click="pgPopulateMode = 'server'">🏥 Server ($populate)</button>
                 </div>
-                <div v-if="!hasActiveServer" style="padding: 0.75rem; border-radius: 6px; background: #fffbeb; color: #92400e; font-size: 0.85rem; margin-bottom: 1rem; border-left: 3px solid #f59e0b;">
-                  ⚠️ No FHIR server configured. Go to the <strong>FHIR Server</strong> tab to connect one.
+
+                <!-- Client-side controls -->
+                <div v-if="pgPopulateMode === 'client'" style="margin-bottom: 1rem;">
+                  <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin-bottom: 0.75rem;">
+                    <button class="btn btn-sm btn-primary" @click="pgPopulateClient" :disabled="pgParsed.error">
+                      ▶ Populate (Client-Side)
+                    </button>
+                    <span style="font-size: 0.78rem; color: var(--c-text-tertiary);">No server needed — evaluates locally</span>
+                  </div>
+                  <div style="padding: 0.6rem 0.75rem; border-radius: 6px; background: var(--c-bg-secondary); font-size: 0.8rem; color: var(--c-text-secondary); border-left: 3px solid var(--c-accent);">
+                    <strong>How it works:</strong> Walks Questionnaire items, applies <code>initial[]</code> static values, and evaluates <code>initialExpression</code> FHIRPath extensions against a mock Patient context (Jane Smith, DOB: 1990-01-15).
+                  </div>
                 </div>
+
+                <!-- Server-side controls -->
+                <div v-if="pgPopulateMode === 'server'" style="margin-bottom: 1rem;">
+                  <div style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.75rem; flex-wrap: wrap;">
+                    <label style="font-size: 0.8rem; font-weight: 600; white-space: nowrap;">Subject Reference:</label>
+                    <input v-model="pgPopulateSubject" class="input-select" style="font-size: 0.8rem; min-width: 200px; flex: 1; max-width: 320px;" placeholder="e.g. Patient/123" />
+                    <button class="btn btn-sm btn-primary" @click="pgPopulateServer" :disabled="pgPopulateServerLoading || pgParsed.error || !hasActiveServer">
+                      {{ pgPopulateServerLoading ? '⏳ Populating...' : '▶ Run $populate' }}
+                    </button>
+                  </div>
+                  <div v-if="!hasActiveServer" style="padding: 0.75rem; border-radius: 6px; background: #fffbeb; color: #92400e; font-size: 0.85rem; margin-bottom: 0.75rem; border-left: 3px solid #f59e0b;">
+                    ⚠️ No FHIR server configured. Go to the <strong>FHIR Server</strong> tab to connect one.
+                  </div>
+                  <div style="padding: 0.6rem 0.75rem; border-radius: 6px; background: var(--c-bg-secondary); font-size: 0.8rem; color: var(--c-text-secondary); border-left: 3px solid #f59e0b;">
+                    <strong>Note:</strong> The public HAPI FHIR server does <strong>not</strong> support <code>$populate</code>. You need an SDC-enabled server (e.g. a local HAPI with the SDC module). Upload the Questionnaire first with <strong>☁️ Upload</strong>.
+                  </div>
+                </div>
+
+                <!-- Results -->
                 <div v-if="pgPopulateError" style="padding: 0.75rem; border-radius: 6px; background: #fef2f2; color: #991b1b; font-size: 0.85rem; margin-bottom: 1rem; border-left: 3px solid #dc2626;">
                   ❌ {{ pgPopulateError }}
                 </div>
                 <div v-if="pgPopulateResult">
                   <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
                     <span style="color: #166534; font-weight: 600;">✅ Population successful</span>
-                    <span style="font-size: 0.75rem; color: var(--c-text-tertiary);">{{ pgPopulateResult.resourceType }}</span>
+                    <span style="font-size: 0.75rem; color: var(--c-text-tertiary);">{{ pgPopulateResult.item?.length || 0 }} item(s) pre-filled</span>
                   </div>
                   <pre class="code-output" style="margin: 0; max-height: 400px; overflow: auto;">{{ JSON.stringify(pgPopulateResult, null, 2) }}</pre>
                 </div>
-                <div v-if="!pgPopulateResult && !pgPopulateError && !pgPopulateLoading" style="color: var(--c-text-tertiary); font-size: 0.85rem; font-style: italic;">
-                  Click <strong>📥 Populate</strong> or <strong>▶ Run $populate</strong> to pre-populate this questionnaire from server data.
+                <div v-if="!pgPopulateResult && !pgPopulateError" style="color: var(--c-text-tertiary); font-size: 0.85rem; font-style: italic;">
+                  Click <strong>📥 Populate</strong> to generate a pre-filled QuestionnaireResponse.
                 </div>
+
                 <details style="margin-top: 1.5rem;">
-                  <summary style="cursor: pointer; font-size: 0.85rem; font-weight: 600; color: var(--c-text-secondary);">ℹ️ How $populate works</summary>
+                  <summary style="cursor: pointer; font-size: 0.85rem; font-weight: 600; color: var(--c-text-secondary);">ℹ️ Population methods in SDC</summary>
                   <ul style="color: var(--c-text-secondary); font-size: 0.82rem; line-height: 1.8; padding-left: 1.2rem; margin-top: 0.5rem;">
-                    <li>The FHIR server takes the Questionnaire URL and a subject reference.</li>
-                    <li>It queries for existing data (Observations, Conditions, etc.) matching <code>code</code>, <code>initialExpression</code>, or <code>observationLinkPeriod</code>.</li>
-                    <li>Returns a pre-filled <code>QuestionnaireResponse</code> with <code>status: in-progress</code>.</li>
-                    <li>Requires the Questionnaire to already exist on the server — use <strong>☁️ Upload</strong> first.</li>
+                    <li><strong>initial[]</strong> — Static default values on Questionnaire items (evaluated here ✅)</li>
+                    <li><strong>initialExpression</strong> — FHIRPath evaluated against launch context (%patient, %encounter) (evaluated here ✅)</li>
+                    <li><strong>Observation-based</strong> — Server queries recent Observations matching item <code>code</code> (server only)</li>
+                    <li><strong>StructureMap-based</strong> — Server runs a FHIR Mapping Language transform (server only)</li>
+                    <li><strong>$populate operation</strong> — Server combines all methods above (server only)</li>
                   </ul>
                 </details>
               </div>
 
               <!-- Extract -->
               <div v-if="pgOutputTab === 'extract'" class="pane-body" style="padding: 1.5rem; overflow: auto;">
-                <h4 style="margin: 0 0 0.75rem 0;">📤 Data Extraction ($extract)</h4>
+                <h4 style="margin: 0 0 0.75rem 0;">📤 Data Extraction</h4>
                 <p style="font-size: 0.85rem; color: var(--c-text-secondary); margin-bottom: 1rem;">
-                  Calls <code>QuestionnaireResponse/$extract</code> on the configured FHIR server to generate FHIR resources (Observations, Conditions, etc.) from the completed form answers.
+                  Generate FHIR resources (Observations, Conditions, etc.) from the completed form answers.
                 </p>
-                <div style="margin-bottom: 1rem;">
-                  <button class="btn btn-sm btn-primary" @click="pgExtract" :disabled="pgExtractLoading || !pgGeneratedResponse || !hasActiveServer">
-                    {{ pgExtractLoading ? '⏳ Extracting...' : '▶ Run $extract' }}
-                  </button>
-                  <span v-if="!pgGeneratedResponse" style="font-size: 0.78rem; color: var(--c-text-tertiary); margin-left: 0.5rem;">Fill the form first to generate a response.</span>
+
+                <!-- Mode toggle -->
+                <div style="display: flex; gap: 0; margin-bottom: 1rem; border: 1px solid var(--c-border); border-radius: 6px; overflow: hidden; width: fit-content;">
+                  <button style="border: none; padding: 0.4rem 1rem; font-size: 0.8rem; font-weight: 600; cursor: pointer;"
+                    :style="{ background: pgExtractMode === 'client' ? 'var(--c-accent)' : 'var(--c-bg-secondary)', color: pgExtractMode === 'client' ? '#fff' : 'var(--c-text-secondary)' }"
+                    @click="pgExtractMode = 'client'">🖥️ Client-Side</button>
+                  <button style="border: none; border-left: 1px solid var(--c-border); padding: 0.4rem 1rem; font-size: 0.8rem; font-weight: 600; cursor: pointer;"
+                    :style="{ background: pgExtractMode === 'server' ? 'var(--c-accent)' : 'var(--c-bg-secondary)', color: pgExtractMode === 'server' ? '#fff' : 'var(--c-text-secondary)' }"
+                    @click="pgExtractMode = 'server'">🏥 Server ($extract)</button>
                 </div>
-                <div v-if="!hasActiveServer" style="padding: 0.75rem; border-radius: 6px; background: #fffbeb; color: #92400e; font-size: 0.85rem; margin-bottom: 1rem; border-left: 3px solid #f59e0b;">
-                  ⚠️ No FHIR server configured. Go to the <strong>FHIR Server</strong> tab to connect one.
+
+                <!-- Client-side controls -->
+                <div v-if="pgExtractMode === 'client'" style="margin-bottom: 1rem;">
+                  <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin-bottom: 0.75rem;">
+                    <button class="btn btn-sm btn-primary" @click="pgExtractClient" :disabled="!pgGeneratedResponse">
+                      ▶ Extract (Client-Side)
+                    </button>
+                    <span v-if="!pgGeneratedResponse" style="font-size: 0.78rem; color: var(--c-text-tertiary);">Fill the form first to generate a response.</span>
+                    <span v-else style="font-size: 0.78rem; color: var(--c-text-tertiary);">No server needed — extracts locally</span>
+                  </div>
+                  <div style="padding: 0.6rem 0.75rem; border-radius: 6px; background: var(--c-bg-secondary); font-size: 0.8rem; color: var(--c-text-secondary); border-left: 3px solid var(--c-accent);">
+                    <strong>How it works:</strong> Walks the QuestionnaireResponse answers and matches them against Questionnaire items with <code>code[]</code> or <code>observationExtract</code> extensions. Each match produces a FHIR Observation in the output Bundle.
+                  </div>
                 </div>
+
+                <!-- Server-side controls -->
+                <div v-if="pgExtractMode === 'server'" style="margin-bottom: 1rem;">
+                  <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin-bottom: 0.75rem;">
+                    <button class="btn btn-sm btn-primary" @click="pgExtractServer" :disabled="pgExtractServerLoading || !pgGeneratedResponse || !hasActiveServer">
+                      {{ pgExtractServerLoading ? '⏳ Extracting...' : '▶ Run $extract' }}
+                    </button>
+                    <span v-if="!pgGeneratedResponse" style="font-size: 0.78rem; color: var(--c-text-tertiary);">Fill the form first.</span>
+                  </div>
+                  <div v-if="!hasActiveServer" style="padding: 0.75rem; border-radius: 6px; background: #fffbeb; color: #92400e; font-size: 0.85rem; margin-bottom: 0.75rem; border-left: 3px solid #f59e0b;">
+                    ⚠️ No FHIR server configured. Go to the <strong>FHIR Server</strong> tab to connect one.
+                  </div>
+                  <div style="padding: 0.6rem 0.75rem; border-radius: 6px; background: var(--c-bg-secondary); font-size: 0.8rem; color: var(--c-text-secondary); border-left: 3px solid #f59e0b;">
+                    <strong>Note:</strong> The public HAPI FHIR server does <strong>not</strong> support <code>$extract</code>. You need an SDC-enabled server. The Questionnaire must also exist on the server.
+                  </div>
+                </div>
+
+                <!-- Results -->
                 <div v-if="pgExtractError" style="padding: 0.75rem; border-radius: 6px; background: #fef2f2; color: #991b1b; font-size: 0.85rem; margin-bottom: 1rem; border-left: 3px solid #dc2626;">
                   ❌ {{ pgExtractError }}
                 </div>
@@ -2478,24 +2797,28 @@ function buildExtractionBundle(response) {
                   </div>
                   <template v-if="pgExtractResult.resourceType === 'Bundle' && pgExtractResult.entry?.length">
                     <div v-for="(entry, idx) in pgExtractResult.entry" :key="idx" style="margin-bottom: 1rem;">
-                      <div style="font-size: 0.8rem; font-weight: 600; color: var(--c-accent); margin-bottom: 0.25rem;">{{ entry.resource?.resourceType || 'Resource' }} #{{ idx + 1 }}</div>
+                      <div style="font-size: 0.8rem; font-weight: 600; color: var(--c-accent); margin-bottom: 0.25rem;">{{ entry.resource?.resourceType || 'Resource' }} #{{ idx + 1 }} <span v-if="entry.resource?.code?.text" style="font-weight: 400; color: var(--c-text-secondary);">— {{ entry.resource.code.text }}</span></div>
                       <pre class="code-output" style="margin: 0; max-height: 250px; overflow: auto;">{{ JSON.stringify(entry.resource || entry, null, 2) }}</pre>
                     </div>
                   </template>
                   <pre v-else class="code-output" style="margin: 0; max-height: 400px; overflow: auto;">{{ JSON.stringify(pgExtractResult, null, 2) }}</pre>
                 </div>
-                <div v-if="!pgExtractResult && !pgExtractError && !pgExtractLoading" style="color: var(--c-text-tertiary); font-size: 0.85rem; font-style: italic;">
-                  Click <strong>📤 Extract</strong> or <strong>▶ Run $extract</strong> to extract FHIR resources from the current form response.
+                <div v-if="!pgExtractResult && !pgExtractError" style="color: var(--c-text-tertiary); font-size: 0.85rem; font-style: italic;">
+                  Click <strong>📤 Extract</strong> to generate FHIR resources from the form response.
                 </div>
+
                 <details style="margin-top: 1.5rem;">
-                  <summary style="cursor: pointer; font-size: 0.85rem; font-weight: 600; color: var(--c-text-secondary);">ℹ️ How $extract works</summary>
+                  <summary style="cursor: pointer; font-size: 0.85rem; font-weight: 600; color: var(--c-text-secondary);">ℹ️ How extraction works</summary>
                   <ul style="color: var(--c-text-secondary); font-size: 0.82rem; line-height: 1.8; padding-left: 1.2rem; margin-top: 0.5rem;">
-                    <li>The server reads the QuestionnaireResponse and its linked Questionnaire.</li>
-                    <li>Items tagged with <code>observationExtract</code> become Observations.</li>
-                    <li>Items with <code>definition</code> URLs map to the target resource elements.</li>
-                    <li>StructureMap-based extraction transforms the entire response via a FHIR Mapping Language map.</li>
-                    <li>Returns a <code>Bundle</code> of created/proposed resources (Observations, Conditions, etc.).</li>
+                    <li><strong>Observation-based</strong> — Items with <code>code[]</code> or <code>observationExtract: true</code> become Observations (supported here ✅)</li>
+                    <li><strong>Definition-based</strong> — Items with <code>definition</code> URLs map to target resource elements (supported here ✅)</li>
+                    <li><strong>StructureMap-based</strong> — A FHIR Mapping Language transform (server only)</li>
+                    <li><strong>Template-based</strong> — Extraction templates in contained resources (server only)</li>
+                    <li><strong>$extract operation</strong> — Server combines all methods above (server only)</li>
                   </ul>
+                  <div style="margin-top: 0.75rem; padding: 0.6rem; background: var(--c-bg-secondary); border-radius: 4px; font-size: 0.8rem;">
+                    <strong>Tip:</strong> To make items extractable, add a <code>code</code> array with a LOINC/SNOMED code, or add the <code>sdc-questionnaire-observationExtract</code> extension. Try the <strong>Observation-Based</strong> population template to see this in action.
+                  </div>
                 </details>
               </div>
 
