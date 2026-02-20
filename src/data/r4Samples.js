@@ -1600,6 +1600,125 @@ Content-Type: application/fhir+json
   }]
 }`,
   },
+  {
+    title: '$assemble Output (Assembled Questionnaire)',
+    description: 'Result of $assemble — sub-questionnaire items inlined, assembledFrom extension added.',
+    snippet: `{
+  "resourceType": "Questionnaire",
+  "url": "http://example.org/fhir/Questionnaire/annual-physical",
+  "status": "active",
+  "title": "Annual Physical Exam (Assembled)",
+  "extension": [
+    {
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-assembledFrom",
+      "valueCanonical": "http://example.org/fhir/Questionnaire/demographics-module|1.0"
+    },
+    {
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-assembledFrom",
+      "valueCanonical": "http://example.org/fhir/Questionnaire/vitals-module|2.1"
+    }
+  ],
+  "item": [
+    { "linkId": "first-name", "text": "First name", "type": "string", "required": true },
+    { "linkId": "last-name", "text": "Last name", "type": "string", "required": true },
+    { "linkId": "dob", "text": "Date of birth", "type": "date", "required": true },
+    { "linkId": "vitals-bp-systolic", "text": "Systolic BP (mmHg)", "type": "integer" },
+    { "linkId": "vitals-bp-diastolic", "text": "Diastolic BP (mmHg)", "type": "integer" },
+    { "linkId": "local-review", "text": "Review of Systems", "type": "group",
+      "item": [
+        { "linkId": "ros-cardio", "text": "Chest pain or palpitations?", "type": "boolean" },
+        { "linkId": "ros-respiratory", "text": "Shortness of breath?", "type": "boolean" }
+      ]
+    }
+  ]
+}`,
+  },
+  {
+    title: 'Inherited Form (derivedFrom)',
+    description: 'A localized Spanish version that inherits structure from a base English questionnaire.',
+    snippet: `{
+  "resourceType": "Questionnaire",
+  "url": "http://example.org/fhir/Questionnaire/intake-form-es",
+  "version": "1.0",
+  "status": "active",
+  "title": "Formulario de Ingreso",
+  "language": "es",
+  "derivedFrom": "http://example.org/fhir/Questionnaire/intake-form-en|1.0",
+  "item": [
+    { "linkId": "first-name", "text": "Nombre", "type": "string", "required": true },
+    { "linkId": "last-name", "text": "Apellido", "type": "string", "required": true },
+    { "linkId": "dob", "text": "Fecha de nacimiento", "type": "date", "required": true },
+    {
+      "linkId": "gender", "text": "Género", "type": "choice",
+      "answerOption": [
+        { "valueCoding": { "code": "male", "display": "Masculino" } },
+        { "valueCoding": { "code": "female", "display": "Femenino" } },
+        { "valueCoding": { "code": "other", "display": "Otro" } }
+      ]
+    }
+  ]
+}`,
+  },
+  {
+    title: 'Specialized Derived Form',
+    description: 'A pediatrics intake form derived from a general intake, adding age-specific questions.',
+    snippet: `{
+  "resourceType": "Questionnaire",
+  "url": "http://example.org/fhir/Questionnaire/intake-pediatrics",
+  "version": "1.0",
+  "status": "active",
+  "title": "Pediatrics Intake Form",
+  "derivedFrom": "http://example.org/fhir/Questionnaire/intake-form-en|1.0",
+  "item": [
+    { "linkId": "first-name", "text": "Child's first name", "type": "string", "required": true },
+    { "linkId": "last-name", "text": "Child's last name", "type": "string", "required": true },
+    { "linkId": "dob", "text": "Date of birth", "type": "date", "required": true },
+    { "linkId": "guardian-name", "text": "Parent/Guardian name", "type": "string", "required": true },
+    { "linkId": "birth-weight", "text": "Birth weight (kg)", "type": "decimal" },
+    { "linkId": "immunizations-current", "text": "Are immunizations up to date?", "type": "boolean" },
+    { "linkId": "developmental-concerns", "text": "Any developmental concerns?", "type": "text" }
+  ]
+}`,
+  },
+  {
+    title: 'Sub-Questionnaire with Variable Inheritance',
+    description: 'A module that defines its own variables — they get promoted to root after $assemble.',
+    snippet: `{
+  "resourceType": "Questionnaire",
+  "url": "http://example.org/fhir/Questionnaire/bmi-module",
+  "version": "1.0",
+  "status": "active",
+  "title": "BMI Calculation Module",
+  "extension": [
+    {
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-assemble-expectation",
+      "valueCode": "assemble-child"
+    },
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/variable",
+      "valueExpression": {
+        "name": "bmiValue",
+        "language": "text/fhirpath",
+        "expression": "%resource.item.where(linkId='bmi-weight').answer.valueDecimal / (%resource.item.where(linkId='bmi-height').answer.valueDecimal / 100).power(2)"
+      }
+    }
+  ],
+  "item": [
+    { "linkId": "bmi-height", "text": "Height (cm)", "type": "decimal", "required": true },
+    { "linkId": "bmi-weight", "text": "Weight (kg)", "type": "decimal", "required": true },
+    {
+      "linkId": "bmi-result", "text": "BMI", "type": "decimal", "readOnly": true,
+      "extension": [{
+        "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-calculatedExpression",
+        "valueExpression": {
+          "language": "text/fhirpath",
+          "expression": "%bmiValue.round(1)"
+        }
+      }]
+    }
+  ]
+}`,
+  },
 ]
 
 // ────────────────────────────────────────────────

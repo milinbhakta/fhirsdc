@@ -261,22 +261,42 @@ export const learningModules = {
       {
         title: 'The subQuestionnaire Extension',
         content:
-          'A display-type item with the subQuestionnaire extension references another Questionnaire by canonical URL. When the form is assembled, the display item is replaced by the items from the referenced sub-questionnaire. The extension URL is: http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-subQuestionnaire',
+          'A display-type item with the subQuestionnaire extension references another Questionnaire by canonical URL. When the form is assembled, the display item is replaced by the items from the referenced sub-questionnaire. The extension URL is: http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-subQuestionnaire\n\nThe `valueCanonical` supports versioned references (e.g., `http://example.org/Questionnaire/demographics|1.0`) so you can pin to a specific version of the sub-questionnaire or use the latest by omitting the version.',
       },
       {
         title: 'The $assemble Operation',
         content:
-          'The $assemble operation takes a modular Questionnaire with subQuestionnaire references and returns a fully assembled, flat Questionnaire with all referenced sub-questionnaires inlined. This assembled form can then be rendered by any standard form filler that does not support modular forms natively. Parameters: questionnaire (the modular root).',
+          'The $assemble operation takes a modular Questionnaire with subQuestionnaire references and returns a fully assembled, flat Questionnaire with all referenced sub-questionnaires inlined. This assembled form can then be rendered by any standard form filler that does not support modular forms natively.\n\n**Input**: A Parameters resource with a single `questionnaire` parameter containing the modular root Questionnaire (or its canonical URL for server-side resolution).\n\n**Output**: A Parameters resource with the assembled Questionnaire. The output has all display-item placeholders replaced with the actual items from the referenced sub-questionnaires.\n\n**Error Handling**: If a referenced sub-questionnaire cannot be found, the server returns an OperationOutcome with details about the missing reference.',
+      },
+      {
+        title: 'The assemble-expectation Extension',
+        content:
+          'The `sdc-questionnaire-assemble-expectation` extension declares a Questionnaire\'s role in the assembly process:\n\n- **assemble-root**: This Questionnaire is a modular root that references sub-questionnaires and should be assembled before rendering.\n- **assemble-child**: This Questionnaire is a reusable module designed to be included by root forms. It should not be rendered on its own.\n- **assemble-root-or-child**: This Questionnaire can serve as either a standalone form or a sub-module included by another form.\n\nForm managers use this extension to filter and categorize Questionnaires appropriately.',
       },
       {
         title: 'Assembly Rules',
         content:
-          '- Sub-questionnaires are inlined at the position of the display item.\n- The assembled Questionnaire\'s extension list is merged from all sub-questionnaires.\n- Variables and launch contexts from sub-questionnaires are promoted to the root.\n- Contained resources from sub-questionnaires are included in the assembled form.\n- Assembly can be recursive (sub-questionnaires can reference other sub-questionnaires).\n- The assembledFrom extension records the original modular source.',
+          '- Sub-questionnaires are inlined at the position of the display item.\n- The assembled Questionnaire\'s extension list is merged from all sub-questionnaires.\n- Variables and launch contexts from sub-questionnaires are promoted to the root.\n- Contained resources from sub-questionnaires are included in the assembled form.\n- Assembly can be recursive (sub-questionnaires can reference other sub-questionnaires).\n- The assembledFrom extension records the original modular source.\n- Item `linkId` values must be unique across all sub-questionnaires to avoid collisions after assembly.\n- `enableWhen` references in sub-questionnaires that point to items in the parent require careful linkId coordination.',
+      },
+      {
+        title: 'Variable & Context Inheritance in Assembly',
+        content:
+          'When sub-questionnaires are assembled into a root form, their extensions are merged:\n\n- **variable** extensions defined at the sub-questionnaire root are promoted to the assembled Questionnaire root, making them available to all items.\n- **launchContext** extensions are merged — if both root and child define the same context name, the root\'s definition takes precedence.\n- **item-level variables** remain scoped to their item and its descendants after assembly.\n\nThis means sub-questionnaires can define their own reusable FHIRPath variables (e.g., a vitals module might define `%bmi`), and after assembly these variables become available throughout the form.',
+      },
+      {
+        title: 'Inherited & Derived Forms (derivedFrom)',
+        content:
+          'The `derivedFrom` element on a Questionnaire references a canonical URL of another Questionnaire that this one is derived from. This supports form inheritance patterns:\n\n- **Localization**: A base English form can be derived to create Spanish, French, or other language versions that inherit the structure but override text.\n- **Specialization**: A generic intake form can be derived for specific departments (pediatrics, oncology) that add department-specific questions while keeping the common sections.\n- **Versioning**: A new version of a form can declare `derivedFrom` pointing to the previous version, establishing a clear lineage.\n\n`derivedFrom` is **metadata-only** — unlike `subQuestionnaire`, it does not trigger any server-side assembly. It is a documentation and traceability mechanism. Form managers can use it to find all forms derived from a given base.',
       },
       {
         title: 'Questionnaire Libraries & Data Elements',
         content:
           '- **Library-based**: A library of reusable questionnaire sections stored on a FHIR server, discoverable by metadata.\n- **Data element-based**: Individual items reference DataElement/StructureDefinition resources for their definition, enabling a "pick from catalog" authoring experience.\n- **derivedFrom**: A Questionnaire can declare it is derived from another (e.g., a localized version of a standard form).',
+      },
+      {
+        title: 'Best Practices for Modular Forms',
+        content:
+          '- **Namespace linkIds**: Prefix sub-questionnaire linkIds with the module name (e.g., `demo-first-name`, `vitals-bp-systolic`) to prevent collisions after assembly.\n- **Version-pin references**: Use versioned canonical URLs (`|1.0`) in subQuestionnaire references for production stability.\n- **Keep modules focused**: Each sub-questionnaire should cover one logical section (demographics, vitals, medications) rather than mixing concerns.\n- **Test after assembly**: Always validate the assembled output — run $assemble and check the resulting Questionnaire for duplicate linkIds, broken enableWhen references, and extension conflicts.\n- **Document dependencies**: If a sub-questionnaire expects specific launchContext variables or parent-level variables, document them in the module description.',
       },
     ],
   },
