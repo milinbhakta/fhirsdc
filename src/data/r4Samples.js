@@ -43,7 +43,8 @@ const patientRegQuestionnaire = {
       item: [
         { linkId: 'phone', text: 'Phone Number', type: 'string', required: true },
         { linkId: 'email', text: 'Email', type: 'string' },
-        { linkId: 'address-line', text: 'Street Address', type: 'string' },
+        { linkId: 'address-line-1', text: 'Address Line 1', type: 'string' },
+        { linkId: 'address-line-2', text: 'Address Line 2', type: 'string' },
         { linkId: 'city', text: 'City', type: 'string' },
         { linkId: 'state', text: 'State / Province', type: 'string' },
         { linkId: 'postal-code', text: 'Postal Code', type: 'string' },
