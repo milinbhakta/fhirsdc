@@ -136,6 +136,33 @@ async function loadFromServer(entry) {
 const assembleLoading = ref(null) // holds entry id while loading
 const assembleError = ref('')
 
+/**
+ * Check if a Questionnaire is a modular root (has subQuestionnaire references)
+ * or has assemble-expectation extension.
+ */
+function isModularRoot(resource) {
+  if (!resource) return false
+  // Check for assemble-expectation extension on the questionnaire
+  const hasAssembleExt = resource.extension?.some(e =>
+    e.url?.includes('assemble-expectation') && e.valueCode === 'assemble-root'
+  )
+  if (hasAssembleExt) return true
+  // Check items recursively for subQuestionnaire extension
+  function hasSubQ(items) {
+    if (!items) return false
+    return items.some(item =>
+      item.extension?.some(e => e.url?.includes('subQuestionnaire')) ||
+      hasSubQ(item.item)
+    )
+  }
+  return hasSubQ(resource.item)
+}
+
+/** Check if a Questionnaire is already assembled (has assembledFrom extension) */
+function isAssembled(resource) {
+  return resource?.extension?.some(e => e.url?.includes('assembledFrom')) || false
+}
+
 async function runAssemble(entry) {
   if (!activeFhirServer.value) { assembleError.value = 'No active FHIR server'; return }
   const resourceId = entry.resource?.id || entry.id
@@ -454,9 +481,11 @@ defineExpose({ activeFhirServer, activeTermServer, browseSearch })
                   {{ entry.resource.description.substring(0, 200) }}{{ entry.resource.description.length > 200 ? '...' : '' }}
                 </p>
               </div>
-              <div style="display: flex; gap: 0.25rem; flex-shrink: 0;">
+              <div style="display: flex; gap: 0.25rem; flex-shrink: 0; align-items: center;">
+                <span v-if="isAssembled(entry.resource)" class="browse-badge assembled" title="This form was assembled from sub-questionnaires">✅ Assembled</span>
+                <span v-else-if="isModularRoot(entry.resource)" class="browse-badge modular" title="This form has subQuestionnaire references">📦 Modular Root</span>
                 <button class="btn btn-sm" @click="loadFromServer(entry)" title="Load into Playground">📥 Load</button>
-                <button class="btn btn-sm" @click="runAssemble(entry)" :disabled="assembleLoading === (entry.resource?.id || entry.id)" title="Run $assemble and load result into Playground">
+                <button v-if="isModularRoot(entry.resource)" class="btn btn-sm" @click="runAssemble(entry)" :disabled="assembleLoading === (entry.resource?.id || entry.id)" title="Run $assemble on the server to resolve subQuestionnaire references">
                   {{ assembleLoading === (entry.resource?.id || entry.id) ? '⏳...' : '🔗 $assemble' }}
                 </button>
               </div>
@@ -853,6 +882,24 @@ defineExpose({ activeFhirServer, activeTermServer, browseSearch })
 }
 .browse-card:hover {
   background: var(--c-bg-hover, rgba(0,0,0,0.02));
+}
+
+.browse-badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.browse-badge.assembled {
+  background: #dcfce7;
+  color: #166534;
+  border: 1px solid #86efac;
+}
+.browse-badge.modular {
+  background: #dbeafe;
+  color: #1e40af;
+  border: 1px solid #93c5fd;
 }
 
 .tx-results {
