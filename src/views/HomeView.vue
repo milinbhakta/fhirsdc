@@ -563,7 +563,7 @@ function pgUpdateResponse(resp) {
 }
 
 // ── Server-Side Operations from Playground ──
-import { validateResource as _validateResource, createResource as _createResource, updateResource as _updateResource, populateQuestionnaire as _populateQuestionnaire, extractResponse as _extractResponse } from '@/utils/fhirClient'
+import { validateResource as _validateResource, createResource as _createResource, updateResource as _updateResource, populateQuestionnaire as _populateQuestionnaire, extractResponse as _extractResponse, assembleLocal as _assembleLocal } from '@/utils/fhirClient'
 const pgServerValidateResult = ref(null)
 const pgServerValidateLoading = ref(false)
 const pgServerValidateError = ref('')
@@ -582,6 +582,54 @@ const pgExtractMode = ref('client') // 'client' | 'server'
 const pgExtractServerLoading = ref(false)
 
 const hasActiveServer = computed(() => !!serverStatus.value.fhir)
+
+// ── Client-side $assemble from Playground ──
+const pgAssembleLoading = ref(false)
+const pgAssembleProgress = ref('')
+
+/** Check if current playground JSON is a modular root (has subQuestionnaire refs) */
+const pgIsModularRoot = computed(() => {
+  try {
+    const q = JSON.parse(pgJson.value)
+    if (q.resourceType !== 'Questionnaire') return false
+    function hasSubQ(items) {
+      if (!items) return false
+      return items.some(item =>
+        item.extension?.some(e => e.url?.includes('subQuestionnaire')) ||
+        hasSubQ(item.item)
+      )
+    }
+    return hasSubQ(q.item)
+  } catch { return false }
+})
+
+async function pgAssemble() {
+  if (!hasActiveServer.value) {
+    pgUploadResult.value = '❌ No FHIR server configured. Sub-questionnaires must be on a FHIR server to assemble.'
+    return
+  }
+  pgAssembleLoading.value = true
+  pgAssembleProgress.value = ''
+  pgUploadResult.value = ''
+  try {
+    const servers = _loadServers()
+    const activeServer = _getActiveServer(servers, 'fhir')
+    if (!activeServer) throw new Error('No active FHIR server')
+    const rootQ = JSON.parse(pgJson.value)
+    if (rootQ.resourceType !== 'Questionnaire') throw new Error('Editor JSON is not a Questionnaire')
+    const assembled = await _assembleLocal(
+      activeServer,
+      rootQ,
+      (msg) => { pgAssembleProgress.value = msg }
+    )
+    pgJson.value = JSON.stringify(assembled, null, 2)
+    pgUploadResult.value = `✅ Assembled! Resolved sub-questionnaires and inlined their items.`
+    pgAssembleProgress.value = ''
+  } catch (err) {
+    pgUploadResult.value = `❌ Assembly failed: ${err.message}`
+  }
+  pgAssembleLoading.value = false
+}
 
 async function pgValidateOnServer() {
   if (!hasActiveServer.value) {
@@ -2811,6 +2859,9 @@ function buildExtractionBundle(response) {
                   <button class="btn btn-sm btn-primary" @click="pgExtract" :disabled="!pgGeneratedResponse" title="Extract FHIR resources from form answers">
                     📤 Extract
                   </button>
+                  <button v-if="pgIsModularRoot" class="btn btn-sm" style="background: #dbeafe; border-color: #93c5fd; color: #1e40af;" @click="pgAssemble" :disabled="pgAssembleLoading || !hasActiveServer" :title="hasActiveServer ? 'Fetch sub-questionnaires from server and assemble locally' : 'No FHIR server — configure one to fetch sub-questionnaires'">
+                    {{ pgAssembleLoading ? '⏳' : '🔧' }} Assemble
+                  </button>
                   <span v-if="pgParsed.error" style="color: var(--c-danger); font-size: 0.75rem;">Invalid JSON</span>
                   <span v-else style="color: var(--c-success); font-size: 0.75rem;">Valid</span>
                   <span v-if="!hasActiveServer" style="color: var(--c-warning, #b45309); font-size: 0.7rem; opacity: 0.8;" title="Configure a FHIR server in the FHIR Server tab to enable server features">⚠️ No server</span>
@@ -2819,6 +2870,9 @@ function buildExtractionBundle(response) {
               <div v-if="pgUploadResult" style="padding: 0.4rem 0.75rem; font-size: 0.8rem; border-bottom: 1px solid var(--c-border);" :style="{ background: pgUploadResult.startsWith('✅') ? '#f0fdf4' : '#fef2f2', color: pgUploadResult.startsWith('✅') ? '#166534' : '#991b1b' }">
                 {{ pgUploadResult }}
                 <button style="border: none; background: none; cursor: pointer; float: right; font-size: 0.8rem;" @click="pgUploadResult = ''">✕</button>
+              </div>
+              <div v-if="pgAssembleProgress" style="padding: 0.4rem 0.75rem; font-size: 0.8rem; border-bottom: 1px solid var(--c-border); background: #dbeafe; color: #1e40af;">
+                ⚙️ {{ pgAssembleProgress }}
               </div>
               <div class="pane-body">
                 <JsonTooltipEditor

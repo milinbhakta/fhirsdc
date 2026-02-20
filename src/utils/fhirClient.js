@@ -291,6 +291,138 @@ export async function assembleQuestionnaire(server, { questionnaireId, questionn
   throw new Error('Either questionnaireId or questionnaireResource must be provided')
 }
 
+// ── Client-Side $assemble ───────────────────────────────────────────
+
+const SUB_Q_EXT = 'http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-subQuestionnaire'
+const ASSEMBLED_FROM_EXT = 'http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-assembledFrom'
+const ASSEMBLE_EXPECT_EXT = 'http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-assemble-expectation'
+
+/**
+ * Fetch a Questionnaire from the server by canonical URL (url|version or just url).
+ */
+async function fetchByCanonical(server, canonical) {
+  // Split url|version
+  const [url, version] = canonical.split('|')
+  const params = { url }
+  if (version) params.version = version
+
+  const bundle = await searchResources(server, 'Questionnaire', params)
+  const entry = bundle?.entry?.[0]
+  if (!entry?.resource) {
+    throw new Error(`Sub-questionnaire not found on server: ${canonical}`)
+  }
+  return entry.resource
+}
+
+/**
+ * Client-side $assemble implementation.
+ *
+ * Resolves all subQuestionnaire references by fetching them from the active FHIR
+ * server, then inlines their items into the root questionnaire. This allows
+ * assembly even when the server doesn't support $assemble natively.
+ *
+ * The algorithm:
+ * 1. Walk all items recursively
+ * 2. For each item with a subQuestionnaire extension → fetch the sub-Q
+ * 3. Replace the placeholder item with the sub-Q's items
+ * 4. Merge root-level extensions and variables from the sub-Q
+ * 5. Add assembledFrom extensions for provenance
+ * 6. Remove assemble-expectation extension from the output
+ *
+ * @param {Object} server - The active FHIR server config
+ * @param {Object} rootQuestionnaire - The modular root Questionnaire resource
+ * @param {Function} [onProgress] - Optional callback(message) for progress updates
+ * @returns {Object} The assembled Questionnaire
+ */
+export async function assembleLocal(server, rootQuestionnaire, onProgress) {
+  const root = JSON.parse(JSON.stringify(rootQuestionnaire)) // deep clone
+  const assembledFromCanonicals = []
+  const fetchCache = {} // canonical → resource (avoid duplicate fetches)
+
+  async function fetchSubQ(canonical) {
+    if (fetchCache[canonical]) return JSON.parse(JSON.stringify(fetchCache[canonical]))
+    onProgress?.(`Fetching: ${canonical}`)
+    const resource = await fetchByCanonical(server, canonical)
+    fetchCache[canonical] = resource
+    return JSON.parse(JSON.stringify(resource)) // return a clone
+  }
+
+  /**
+   * Process an array of items, resolving any subQuestionnaire references.
+   * Returns a new flat array with placeholders replaced by sub-Q items.
+   */
+  async function processItems(items) {
+    if (!items?.length) return []
+
+    const result = []
+    for (const item of items) {
+      const subQExt = item.extension?.find(e => e.url === SUB_Q_EXT)
+
+      if (subQExt) {
+        // This item is a placeholder — fetch and inline the sub-questionnaire
+        const canonical = subQExt.valueCanonical
+        const subQ = await fetchSubQ(canonical)
+
+        // Track provenance
+        if (!assembledFromCanonicals.includes(canonical)) {
+          assembledFromCanonicals.push(canonical)
+        }
+
+        // Merge sub-Q's root-level extensions (variables, etc.) into the root
+        if (subQ.extension?.length) {
+          if (!root.extension) root.extension = []
+          for (const ext of subQ.extension) {
+            // Skip assemble-expectation and subQuestionnaire extensions
+            if (ext.url === ASSEMBLE_EXPECT_EXT || ext.url === SUB_Q_EXT) continue
+            // Avoid duplicate extensions (by url + value)
+            const extJson = JSON.stringify(ext)
+            if (!root.extension.some(e => JSON.stringify(e) === extJson)) {
+              root.extension.push(ext)
+            }
+          }
+        }
+
+        // Inline the sub-Q's items (recursively processing nested subQ refs)
+        if (subQ.item?.length) {
+          const processedSubItems = await processItems(subQ.item)
+          result.push(...processedSubItems)
+        }
+      } else {
+        // Regular item — recursively process children
+        if (item.item?.length) {
+          item.item = await processItems(item.item)
+        }
+        result.push(item)
+      }
+    }
+    return result
+  }
+
+  onProgress?.('Starting assembly...')
+
+  // Process all items
+  root.item = await processItems(root.item)
+
+  // Add assembledFrom extensions
+  if (!root.extension) root.extension = []
+  for (const canonical of assembledFromCanonicals) {
+    root.extension.push({
+      url: ASSEMBLED_FROM_EXT,
+      valueCanonical: canonical,
+    })
+  }
+
+  // Remove assemble-expectation extension from the output
+  root.extension = root.extension.filter(e => e.url !== ASSEMBLE_EXPECT_EXT)
+
+  // Clean up empty extension arrays
+  if (root.extension.length === 0) delete root.extension
+
+  onProgress?.(`Assembly complete — ${assembledFromCanonicals.length} sub-questionnaire(s) resolved`)
+
+  return root
+}
+
 // ── Terminology Convenience ─────────────────────────────────────────
 
 export async function searchValueSets(server, params = {}) {

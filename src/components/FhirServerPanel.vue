@@ -15,6 +15,7 @@ import {
   searchCodeSystems,
   searchResources,
   assembleQuestionnaire,
+  assembleLocal,
 } from '@/utils/fhirClient'
 
 const emit = defineEmits(['load-questionnaire', 'server-status-change'])
@@ -135,6 +136,8 @@ async function loadFromServer(entry) {
 // ── $assemble ──
 const assembleLoading = ref(null) // holds entry id while loading
 const assembleError = ref('')
+const assembleProgress = ref('') // progress messages for local assemble
+const assembleMode = ref('') // 'server' | 'local' — which method is running
 
 /**
  * Check if a Questionnaire is a modular root (has subQuestionnaire references)
@@ -167,7 +170,9 @@ async function runAssemble(entry) {
   if (!activeFhirServer.value) { assembleError.value = 'No active FHIR server'; return }
   const resourceId = entry.resource?.id || entry.id
   assembleLoading.value = resourceId
+  assembleMode.value = 'server'
   assembleError.value = ''
+  assembleProgress.value = ''
   try {
     const result = await assembleQuestionnaire(activeFhirServer.value, { questionnaireId: resourceId })
     // The result could be a Parameters resource wrapping the assembled Q, or the Q directly
@@ -178,9 +183,36 @@ async function runAssemble(entry) {
     }
     emit('load-questionnaire', JSON.stringify(assembled, null, 2))
   } catch (err) {
-    assembleError.value = `$assemble failed for ${resourceId}: ${err.message}`
+    assembleError.value = `Server $assemble failed: ${err.message}. Try “Assemble (Client)” instead — it fetches sub-questionnaires and assembles locally.`
   }
   assembleLoading.value = null
+  assembleMode.value = ''
+}
+
+async function runAssembleLocal(entry) {
+  if (!activeFhirServer.value) { assembleError.value = 'No active FHIR server'; return }
+  assembleError.value = ''
+  assembleProgress.value = ''
+  const resourceId = entry.resource?.id || entry.id
+  assembleLoading.value = resourceId
+  assembleMode.value = 'local'
+  try {
+    // Fetch the full resource if we only have a summary
+    const fullQ = entry.resource?.item
+      ? entry.resource
+      : await fetchQuestionnaireById(activeFhirServer.value, resourceId)
+    const assembled = await assembleLocal(
+      activeFhirServer.value,
+      fullQ,
+      (msg) => { assembleProgress.value = msg }
+    )
+    emit('load-questionnaire', JSON.stringify(assembled, null, 2))
+    assembleProgress.value = ''
+  } catch (err) {
+    assembleError.value = `Client-side assembly failed: ${err.message}`
+  }
+  assembleLoading.value = null
+  assembleMode.value = ''
 }
 
 // ── Validate ──
@@ -460,6 +492,9 @@ defineExpose({ activeFhirServer, activeTermServer, browseSearch })
 
         <div v-if="browseError" class="error-text">{{ browseError }}</div>
         <div v-if="assembleError" class="error-text" style="margin-bottom: 0.5rem;">{{ assembleError }}</div>
+        <div v-if="assembleProgress" style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; padding: 0.5rem 0.75rem; background: #dbeafe; border-radius: 6px; font-size: 0.8rem; color: #1e40af;">
+          <span style="animation: spin 1s linear infinite; display: inline-block;">⚙️</span> {{ assembleProgress }}
+        </div>
 
         <div v-if="browseResults" class="browse-results">
           <div class="result-summary">
@@ -481,13 +516,18 @@ defineExpose({ activeFhirServer, activeTermServer, browseSearch })
                   {{ entry.resource.description.substring(0, 200) }}{{ entry.resource.description.length > 200 ? '...' : '' }}
                 </p>
               </div>
-              <div style="display: flex; gap: 0.25rem; flex-shrink: 0; align-items: center;">
+              <div style="display: flex; gap: 0.25rem; flex-shrink: 0; align-items: center; flex-wrap: wrap; justify-content: flex-end;">
                 <span v-if="isAssembled(entry.resource)" class="browse-badge assembled" title="This form was assembled from sub-questionnaires">✅ Assembled</span>
                 <span v-else-if="isModularRoot(entry.resource)" class="browse-badge modular" title="This form has subQuestionnaire references">📦 Modular Root</span>
                 <button class="btn btn-sm" @click="loadFromServer(entry)" title="Load into Playground">📥 Load</button>
-                <button v-if="isModularRoot(entry.resource)" class="btn btn-sm" @click="runAssemble(entry)" :disabled="assembleLoading === (entry.resource?.id || entry.id)" title="Run $assemble on the server to resolve subQuestionnaire references">
-                  {{ assembleLoading === (entry.resource?.id || entry.id) ? '⏳...' : '🔗 $assemble' }}
-                </button>
+                <template v-if="isModularRoot(entry.resource)">
+                  <button class="btn btn-sm" @click="runAssemble(entry)" :disabled="!!assembleLoading" title="Ask the FHIR server to run $assemble (requires server support)">
+                    {{ assembleLoading === (entry.resource?.id || entry.id) && assembleMode === 'server' ? '⏳...' : '🏥 Server $assemble' }}
+                  </button>
+                  <button class="btn btn-sm" style="background: #dbeafe; border-color: #93c5fd; color: #1e40af;" @click="runAssembleLocal(entry)" :disabled="!!assembleLoading" title="Fetch sub-questionnaires from server and assemble in the browser — works with any FHIR server">
+                    {{ assembleLoading === (entry.resource?.id || entry.id) && assembleMode === 'local' ? '⏳...' : '🔧 Client $assemble' }}
+                  </button>
+                </template>
               </div>
             </div>
             <div v-if="entry.resource?.item" style="font-size: 0.75rem; color: var(--c-text-tertiary); margin-top: 0.5rem;">
@@ -1019,5 +1059,10 @@ defineExpose({ activeFhirServer, activeTermServer, browseSearch })
 .error-text {
   color: var(--c-danger, #dc2626);
   font-size: 0.85rem;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 </style>
