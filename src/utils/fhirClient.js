@@ -258,6 +258,39 @@ export async function extractResponse(server, questionnaireResponse) {
   })
 }
 
+/**
+ * Call $assemble on a FHIR server.
+ * Takes a modular Questionnaire (with subQuestionnaire references) and returns
+ * a fully assembled Questionnaire with all items inlined.
+ * - Instance-level: Questionnaire/{id}/$assemble
+ * - Type-level: Questionnaire/$assemble (with questionnaire as parameter)
+ */
+export async function assembleQuestionnaire(server, { questionnaireId, questionnaireResource } = {}) {
+  // Prefer instance-level (most SDC servers support this)
+  if (questionnaireId) {
+    return fhirFetch(server, `/Questionnaire/${encodeURIComponent(questionnaireId)}/$assemble`, {
+      method: 'POST',
+      body: JSON.stringify({ resourceType: 'Parameters', parameter: [] }),
+    })
+  }
+
+  // Type-level: pass the questionnaire resource directly
+  if (questionnaireResource) {
+    const params = {
+      resourceType: 'Parameters',
+      parameter: [
+        { name: 'questionnaire', resource: questionnaireResource },
+      ],
+    }
+    return fhirFetch(server, '/Questionnaire/$assemble', {
+      method: 'POST',
+      body: JSON.stringify(params),
+    })
+  }
+
+  throw new Error('Either questionnaireId or questionnaireResource must be provided')
+}
+
 // ── Terminology Convenience ─────────────────────────────────────────
 
 export async function searchValueSets(server, params = {}) {

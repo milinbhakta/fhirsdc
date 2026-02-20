@@ -2590,6 +2590,27 @@ function buildExtractionBundle(response) {
             </div>
           </div>
 
+          <!-- Interactive $assemble Demo -->
+          <div style="background: linear-gradient(135deg, #f0fdf4, #ecfdf5); padding: 1.5rem; border-radius: 12px; border: 1px solid #86efac; margin-bottom: 2rem;">
+            <h3 style="margin: 0 0 0.5rem; color: #166534;">🧪 Try It: Assembled Health Screening Form</h3>
+            <p style="font-size: 0.85rem; color: #15803d; margin: 0 0 1rem;">
+              This is a realistic assembled form — the final output of <code>$assemble</code>. It includes demographics, vitals with auto-calculated BMI, 
+              conditional medical history, sliders, checkboxes, and collapsible sections. All from modular sub-questionnaires.
+            </p>
+            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+              <button class="btn" style="background: #166534; color: white;" @click="tryInPlayground(modularFormsExamples.find(e => e.title.includes('Assembled'))?.snippet || '')">
+                ▶ Open in Playground
+              </button>
+              <button class="btn btn-sm" @click="activeTab = 'server'" style="border-color: #166534; color: #166534;">
+                🔗 Browse from FHIR Server
+              </button>
+            </div>
+            <p style="font-size: 0.78rem; color: #15803d; margin: 0.75rem 0 0; opacity: 0.8;">
+              💡 <strong>Tip:</strong> If you've uploaded this form to a FHIR server, go to the <strong>FHIR Server</strong> tab → <strong>Browse</strong> → 
+              click <strong>🔗 $assemble</strong> on any modular root to run the operation live and load the result into the Playground.
+            </p>
+          </div>
+
           <h3 style="margin-bottom: 1rem;">Code Examples</h3>
           <div class="reference-grid">
             <article v-for="example in modularFormsExamples" :key="example.title" class="reference-card">

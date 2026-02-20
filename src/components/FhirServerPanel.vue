@@ -14,6 +14,7 @@ import {
   searchValueSets,
   searchCodeSystems,
   searchResources,
+  assembleQuestionnaire,
 } from '@/utils/fhirClient'
 
 const emit = defineEmits(['load-questionnaire', 'server-status-change'])
@@ -129,6 +130,30 @@ async function loadFromServer(entry) {
   } catch (err) {
     browseError.value = err.message
   }
+}
+
+// ── $assemble ──
+const assembleLoading = ref(null) // holds entry id while loading
+const assembleError = ref('')
+
+async function runAssemble(entry) {
+  if (!activeFhirServer.value) { assembleError.value = 'No active FHIR server'; return }
+  const resourceId = entry.resource?.id || entry.id
+  assembleLoading.value = resourceId
+  assembleError.value = ''
+  try {
+    const result = await assembleQuestionnaire(activeFhirServer.value, { questionnaireId: resourceId })
+    // The result could be a Parameters resource wrapping the assembled Q, or the Q directly
+    let assembled = result
+    if (result.resourceType === 'Parameters') {
+      const qParam = result.parameter?.find(p => p.name === 'return' || p.resource?.resourceType === 'Questionnaire')
+      assembled = qParam?.resource || result
+    }
+    emit('load-questionnaire', JSON.stringify(assembled, null, 2))
+  } catch (err) {
+    assembleError.value = `$assemble failed for ${resourceId}: ${err.message}`
+  }
+  assembleLoading.value = null
 }
 
 // ── Validate ──
@@ -407,6 +432,7 @@ defineExpose({ activeFhirServer, activeTermServer, browseSearch })
         </div>
 
         <div v-if="browseError" class="error-text">{{ browseError }}</div>
+        <div v-if="assembleError" class="error-text" style="margin-bottom: 0.5rem;">{{ assembleError }}</div>
 
         <div v-if="browseResults" class="browse-results">
           <div class="result-summary">
@@ -428,7 +454,12 @@ defineExpose({ activeFhirServer, activeTermServer, browseSearch })
                   {{ entry.resource.description.substring(0, 200) }}{{ entry.resource.description.length > 200 ? '...' : '' }}
                 </p>
               </div>
-              <button class="btn btn-sm" @click="loadFromServer(entry)" style="flex-shrink: 0;">📥 Load</button>
+              <div style="display: flex; gap: 0.25rem; flex-shrink: 0;">
+                <button class="btn btn-sm" @click="loadFromServer(entry)" title="Load into Playground">📥 Load</button>
+                <button class="btn btn-sm" @click="runAssemble(entry)" :disabled="assembleLoading === (entry.resource?.id || entry.id)" title="Run $assemble and load result into Playground">
+                  {{ assembleLoading === (entry.resource?.id || entry.id) ? '⏳...' : '🔗 $assemble' }}
+                </button>
+              </div>
             </div>
             <div v-if="entry.resource?.item" style="font-size: 0.75rem; color: var(--c-text-tertiary); margin-top: 0.5rem;">
               {{ entry.resource.item.length }} top-level item(s)
