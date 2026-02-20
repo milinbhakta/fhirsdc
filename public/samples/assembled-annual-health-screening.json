@@ -1,0 +1,680 @@
+{
+  "resourceType": "Questionnaire",
+  "id": "assembled-annual-health-screening",
+  "url": "http://example.org/Questionnaire/annual-health-screening",
+  "version": "1.0.0",
+  "name": "AnnualHealthScreeningAssembled",
+  "title": "Annual Health Screening — Assembled",
+  "status": "active",
+  "subjectType": ["Patient"],
+  "date": "2026-02-20",
+  "publisher": "FHIR SDC Lab",
+  "description": "A comprehensive annual health screening questionnaire, assembled from modular sub-questionnaires. Demonstrates demographics, vitals with BMI calculation, medical history with conditional logic, and lifestyle assessment.",
+  "extension": [
+    {
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-assembledFrom",
+      "valueCanonical": "http://example.org/Questionnaire/module-demographics|1.0"
+    },
+    {
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-assembledFrom",
+      "valueCanonical": "http://example.org/Questionnaire/module-vitals|1.0"
+    },
+    {
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-assembledFrom",
+      "valueCanonical": "http://example.org/Questionnaire/module-medical-history|1.0"
+    },
+    {
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-assembledFrom",
+      "valueCanonical": "http://example.org/Questionnaire/module-lifestyle|1.0"
+    }
+  ],
+  "item": [
+    {
+      "linkId": "demographics",
+      "text": "Demographics",
+      "type": "group",
+      "extension": [
+        {
+          "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+          "valueCodeableConcept": {
+            "coding": [
+              {
+                "system": "http://hl7.org/fhir/questionnaire-item-control",
+                "code": "page",
+                "display": "Page"
+              }
+            ]
+          }
+        }
+      ],
+      "item": [
+        {
+          "linkId": "demo-instructions",
+          "text": "Please provide your current personal information. Fields marked with * are required.",
+          "type": "display",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/questionnaire-item-control",
+                    "code": "help",
+                    "display": "Help-Button"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "demo-first-name",
+          "text": "First Name",
+          "type": "string",
+          "required": true,
+          "maxLength": 100,
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/entryFormat",
+              "valueString": "Given name"
+            }
+          ]
+        },
+        {
+          "linkId": "demo-last-name",
+          "text": "Last Name",
+          "type": "string",
+          "required": true,
+          "maxLength": 100,
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/entryFormat",
+              "valueString": "Family name"
+            }
+          ]
+        },
+        {
+          "linkId": "demo-dob",
+          "text": "Date of Birth",
+          "type": "date",
+          "required": true
+        },
+        {
+          "linkId": "demo-gender",
+          "text": "Gender",
+          "type": "choice",
+          "required": true,
+          "answerOption": [
+            { "valueCoding": { "system": "http://hl7.org/fhir/administrative-gender", "code": "male", "display": "Male" } },
+            { "valueCoding": { "system": "http://hl7.org/fhir/administrative-gender", "code": "female", "display": "Female" } },
+            { "valueCoding": { "system": "http://hl7.org/fhir/administrative-gender", "code": "other", "display": "Other" } },
+            { "valueCoding": { "system": "http://hl7.org/fhir/administrative-gender", "code": "unknown", "display": "Prefer not to say" } }
+          ],
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/questionnaire-item-control",
+                    "code": "radio-button",
+                    "display": "Radio Button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ]
+        },
+        {
+          "linkId": "demo-phone",
+          "text": "Phone Number",
+          "type": "string",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/entryFormat",
+              "valueString": "(XXX) XXX-XXXX"
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/regex",
+              "valueString": "^\\(\\d{3}\\) \\d{3}-\\d{4}$"
+            }
+          ]
+        },
+        {
+          "linkId": "demo-email",
+          "text": "Email Address",
+          "type": "string",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/entryFormat",
+              "valueString": "you@example.com"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "linkId": "vitals",
+      "text": "Vitals & Measurements",
+      "type": "group",
+      "extension": [
+        {
+          "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-shortText",
+          "valueString": "Vitals"
+        }
+      ],
+      "item": [
+        {
+          "linkId": "vitals-height",
+          "text": "Height (cm)",
+          "type": "decimal",
+          "required": true,
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/minValue",
+              "valueDecimal": 30
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/maxValue",
+              "valueDecimal": 300
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/entryFormat",
+              "valueString": "cm"
+            }
+          ]
+        },
+        {
+          "linkId": "vitals-weight",
+          "text": "Weight (kg)",
+          "type": "decimal",
+          "required": true,
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/minValue",
+              "valueDecimal": 1
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/maxValue",
+              "valueDecimal": 500
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/entryFormat",
+              "valueString": "kg"
+            }
+          ]
+        },
+        {
+          "linkId": "vitals-bmi",
+          "text": "BMI (auto-calculated)",
+          "type": "decimal",
+          "readOnly": true,
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-calculatedExpression",
+              "valueExpression": {
+                "description": "BMI = weight / (height in metres)²",
+                "language": "text/fhirpath",
+                "expression": "(%resource.item.descendants().where(linkId='vitals-weight').answer.value / (%resource.item.descendants().where(linkId='vitals-height').answer.value / 100).power(2)).round(1)"
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/rendering-style",
+              "valueString": "font-weight: bold; color: #2563eb;"
+            }
+          ]
+        },
+        {
+          "linkId": "vitals-bp-systolic",
+          "text": "Blood Pressure — Systolic (mmHg)",
+          "type": "integer",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/minValue",
+              "valueInteger": 60
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/maxValue",
+              "valueInteger": 250
+            }
+          ]
+        },
+        {
+          "linkId": "vitals-bp-diastolic",
+          "text": "Blood Pressure — Diastolic (mmHg)",
+          "type": "integer",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/minValue",
+              "valueInteger": 30
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/maxValue",
+              "valueInteger": 180
+            }
+          ]
+        },
+        {
+          "linkId": "vitals-temp",
+          "text": "Body Temperature (°C)",
+          "type": "decimal",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/minValue",
+              "valueDecimal": 34.0
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/maxValue",
+              "valueDecimal": 42.0
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/entryFormat",
+              "valueString": "°C"
+            }
+          ]
+        },
+        {
+          "linkId": "vitals-pain",
+          "text": "Current Pain Level",
+          "type": "integer",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/questionnaire-item-control",
+                    "code": "slider",
+                    "display": "Slider"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/minValue",
+              "valueInteger": 0
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/maxValue",
+              "valueInteger": 10
+            },
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-sliderStepValue",
+              "valueInteger": 1
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-sliderStepValue",
+              "valueInteger": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "linkId": "medical-history",
+      "text": "Medical History",
+      "type": "group",
+      "extension": [
+        {
+          "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-collapsible",
+          "valueCode": "default-open"
+        }
+      ],
+      "item": [
+        {
+          "linkId": "mh-chronic",
+          "text": "Do you have any chronic conditions?",
+          "type": "boolean",
+          "required": true
+        },
+        {
+          "linkId": "mh-conditions",
+          "text": "Select all conditions that apply",
+          "type": "choice",
+          "repeats": true,
+          "enableWhen": [
+            {
+              "question": "mh-chronic",
+              "operator": "=",
+              "answerBoolean": true
+            }
+          ],
+          "answerOption": [
+            { "valueCoding": { "system": "http://snomed.info/sct", "code": "73211009", "display": "Diabetes mellitus" } },
+            { "valueCoding": { "system": "http://snomed.info/sct", "code": "38341003", "display": "Hypertension" } },
+            { "valueCoding": { "system": "http://snomed.info/sct", "code": "195967001", "display": "Asthma" } },
+            { "valueCoding": { "system": "http://snomed.info/sct", "code": "44054006", "display": "Type 2 diabetes" } },
+            { "valueCoding": { "system": "http://snomed.info/sct", "code": "13645005", "display": "COPD" } },
+            { "valueCoding": { "system": "http://snomed.info/sct", "code": "84114007", "display": "Heart failure" } }
+          ],
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/questionnaire-item-control",
+                    "code": "check-box",
+                    "display": "Check-box"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "mh-diabetes-type",
+          "text": "What type of diabetes?",
+          "type": "choice",
+          "enableWhen": [
+            {
+              "question": "mh-conditions",
+              "operator": "=",
+              "answerCoding": { "system": "http://snomed.info/sct", "code": "73211009" }
+            }
+          ],
+          "answerOption": [
+            { "valueCoding": { "system": "http://snomed.info/sct", "code": "46635009", "display": "Type 1" } },
+            { "valueCoding": { "system": "http://snomed.info/sct", "code": "44054006", "display": "Type 2" } },
+            { "valueCoding": { "system": "http://snomed.info/sct", "code": "11687002", "display": "Gestational" } }
+          ],
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/questionnaire-item-control",
+                    "code": "radio-button",
+                    "display": "Radio Button"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "mh-allergies",
+          "text": "Do you have any known allergies?",
+          "type": "boolean"
+        },
+        {
+          "linkId": "mh-allergy-list",
+          "text": "Please list your allergies",
+          "type": "text",
+          "enableWhen": [
+            {
+              "question": "mh-allergies",
+              "operator": "=",
+              "answerBoolean": true
+            }
+          ],
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/entryFormat",
+              "valueString": "List each allergy on a separate line"
+            }
+          ]
+        },
+        {
+          "linkId": "mh-medications",
+          "text": "Are you currently taking any medications?",
+          "type": "boolean"
+        },
+        {
+          "linkId": "mh-med-count",
+          "text": "How many medications are you currently taking?",
+          "type": "integer",
+          "enableWhen": [
+            {
+              "question": "mh-medications",
+              "operator": "=",
+              "answerBoolean": true
+            }
+          ],
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/minValue",
+              "valueInteger": 1
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/maxValue",
+              "valueInteger": 50
+            }
+          ]
+        },
+        {
+          "linkId": "mh-surgery",
+          "text": "Have you had any surgeries in the past 5 years?",
+          "type": "boolean"
+        },
+        {
+          "linkId": "mh-surgery-details",
+          "text": "Please describe the surgery",
+          "type": "text",
+          "enableWhen": [
+            {
+              "question": "mh-surgery",
+              "operator": "=",
+              "answerBoolean": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "linkId": "lifestyle",
+      "text": "Lifestyle Assessment",
+      "type": "group",
+      "extension": [
+        {
+          "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-collapsible",
+          "valueCode": "default-closed"
+        }
+      ],
+      "item": [
+        {
+          "linkId": "ls-smoking",
+          "text": "Smoking Status",
+          "type": "choice",
+          "required": true,
+          "answerOption": [
+            { "valueCoding": { "system": "http://snomed.info/sct", "code": "266919005", "display": "Never smoked" } },
+            { "valueCoding": { "system": "http://snomed.info/sct", "code": "8517006", "display": "Former smoker" } },
+            { "valueCoding": { "system": "http://snomed.info/sct", "code": "77176002", "display": "Current smoker" } }
+          ],
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/questionnaire-item-control",
+                    "code": "radio-button",
+                    "display": "Radio Button"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "ls-smoking-packs",
+          "text": "Packs per day",
+          "type": "decimal",
+          "enableWhen": [
+            {
+              "question": "ls-smoking",
+              "operator": "=",
+              "answerCoding": { "system": "http://snomed.info/sct", "code": "77176002" }
+            }
+          ],
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/minValue",
+              "valueDecimal": 0.1
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/maxValue",
+              "valueDecimal": 10
+            }
+          ]
+        },
+        {
+          "linkId": "ls-alcohol",
+          "text": "Do you consume alcohol?",
+          "type": "boolean"
+        },
+        {
+          "linkId": "ls-alcohol-freq",
+          "text": "How often do you drink?",
+          "type": "choice",
+          "enableWhen": [
+            {
+              "question": "ls-alcohol",
+              "operator": "=",
+              "answerBoolean": true
+            }
+          ],
+          "answerOption": [
+            { "valueCoding": { "code": "rarely", "display": "Rarely (a few times a year)" } },
+            { "valueCoding": { "code": "monthly", "display": "Monthly" } },
+            { "valueCoding": { "code": "weekly", "display": "Weekly" } },
+            { "valueCoding": { "code": "daily", "display": "Daily" } }
+          ]
+        },
+        {
+          "linkId": "ls-exercise",
+          "text": "How many days per week do you exercise?",
+          "type": "integer",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/questionnaire-item-control",
+                    "code": "slider",
+                    "display": "Slider"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/minValue",
+              "valueInteger": 0
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/maxValue",
+              "valueInteger": 7
+            },
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-sliderStepValue",
+              "valueInteger": 1
+            }
+          ]
+        },
+        {
+          "linkId": "ls-exercise-type",
+          "text": "Types of exercise",
+          "type": "choice",
+          "repeats": true,
+          "enableWhen": [
+            {
+              "question": "ls-exercise",
+              "operator": ">",
+              "answerInteger": 0
+            }
+          ],
+          "answerOption": [
+            { "valueCoding": { "code": "walking", "display": "Walking" } },
+            { "valueCoding": { "code": "running", "display": "Running / Jogging" } },
+            { "valueCoding": { "code": "swimming", "display": "Swimming" } },
+            { "valueCoding": { "code": "cycling", "display": "Cycling" } },
+            { "valueCoding": { "code": "weights", "display": "Weight Training" } },
+            { "valueCoding": { "code": "yoga", "display": "Yoga / Pilates" } }
+          ],
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/questionnaire-item-control",
+                    "code": "check-box",
+                    "display": "Check-box"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "ls-sleep",
+          "text": "Average hours of sleep per night",
+          "type": "decimal",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/minValue",
+              "valueDecimal": 0
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/maxValue",
+              "valueDecimal": 24
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/entryFormat",
+              "valueString": "hours"
+            }
+          ]
+        },
+        {
+          "linkId": "ls-stress",
+          "text": "Overall Stress Level",
+          "type": "integer",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/questionnaire-item-control",
+                    "code": "slider",
+                    "display": "Slider"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/minValue",
+              "valueInteger": 1
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/maxValue",
+              "valueInteger": 10
+            },
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-sliderStepValue",
+              "valueInteger": 1
+            }
+          ]
+        },
+        {
+          "linkId": "ls-notes",
+          "text": "Additional notes or concerns",
+          "type": "text",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/entryFormat",
+              "valueString": "Anything else you'd like your provider to know?"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
